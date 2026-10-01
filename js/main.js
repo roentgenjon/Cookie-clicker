@@ -53,15 +53,16 @@ function spaceClick() {
   const c = $('#bigCookie'); c.style.transform = 'scale(.93)'; setTimeout(() => { c.style.transform = ''; }, 40);
 }
 function stopHold() { clearInterval(holdTimer); holdTimer = null; }
+const isSpace = (e) => e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
 const typing = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
 document.addEventListener('keydown', (e) => {
-  if (e.code !== 'Space' || typing(e.target) || modal.open) return;
+  if (!isSpace(e) || typing(e.target) || modal.open) return;
   e.preventDefault();
   if (e.repeat || holdTimer) return;
   spaceClick();
   holdTimer = setInterval(spaceClick, 50);
 });
-document.addEventListener('keyup', (e) => { if (e.code === 'Space') { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
+document.addEventListener('keyup', (e) => { if (isSpace(e)) { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
 addEventListener('blur', stopHold);
 
 // ---------- Goldener Keks ----------

@@ -1,7 +1,7 @@
 name: Deploy Cloudflare Worker
 on:
   push:
-    branches: [main, master]
+    branches: [claude/cookie-clicker-game, main, master]
     paths: ['worker/**']
   workflow_dispatch:
 jobs:
