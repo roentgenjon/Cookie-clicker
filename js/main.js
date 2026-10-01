@@ -44,8 +44,25 @@ $('#bigCookie').addEventListener('pointerdown', (e) => {
   const r = $('#floaters').getBoundingClientRect();
   floater('+' + fmt(v), e.clientX - r.left - 14 + (Math.random() * 30 - 15), e.clientY - r.top - 20);
 });
-$('#bigCookie').addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') e.preventDefault(); });
-$('#bigCookie').addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') game.click(); });
+// Leertaste: klickt wie der Keks; gedrückt halten = schnelles Dauerklicken (20/s)
+let holdTimer = null;
+function spaceClick() {
+  const v = game.click();
+  const r = $('#floaters').getBoundingClientRect();
+  floater('+' + fmt(v), r.width / 2 - 14 + (Math.random() * 120 - 60), r.height / 2 - 40 + (Math.random() * 60 - 30));
+  const c = $('#bigCookie'); c.style.transform = 'scale(.93)'; setTimeout(() => { c.style.transform = ''; }, 40);
+}
+function stopHold() { clearInterval(holdTimer); holdTimer = null; }
+const typing = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || typing(e.target) || modal.open) return;
+  e.preventDefault();
+  if (e.repeat || holdTimer) return;
+  spaceClick();
+  holdTimer = setInterval(spaceClick, 50);
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'Space') { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
+addEventListener('blur', stopHold);
 
 // ---------- Goldener Keks ----------
 const gcEl = $('#golden');
