@@ -1,0 +1,10 @@
+name = "cookie-clicker-api"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# KV-Datenbank für Spielstände + Rangliste (wird beim ersten Deploy automatisch angelegt)
+[[kv_namespaces]]
+binding = "SAVES"
+
+[vars]
+ALLOWED_ORIGIN = "*"

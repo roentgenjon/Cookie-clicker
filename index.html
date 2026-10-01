@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Keks-Imperium – Cookie Clicker</title>
+  <meta name="description" content="Cookie Clicker mit 10.000 Upgrades, Aufstieg, goldenen Keksen, Erfolgen, Cloud-Speicherstand und Rangliste.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1><span id="bakeryName">Dein</span> Keks-Imperium</h1>
+    <nav>
+      <button data-modal="stats">📊 Statistik</button>
+      <button data-modal="ach">🏆 Erfolge <span id="achBadge" class="badge"></span></button>
+      <button data-modal="ascend">🪽 Aufstieg</button>
+      <button data-modal="cloud">☁️ Cloud</button>
+      <button data-modal="settings">⚙️ Optionen</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="panel left" id="left">
+      <div class="bank"><span id="cookies">0</span> <small>Kekse</small></div>
+      <div class="cps">pro Sekunde: <b id="cps">0</b> <span id="buffs"></span></div>
+      <div class="cookie-wrap">
+        <button id="bigCookie" aria-label="Großer Keks">🍪</button>
+        <div id="floaters"></div>
+        <button id="golden" class="golden hidden" aria-label="Goldener Keks">🌟</button>
+      </div>
+      <div class="click-info">Klick: <b id="clickVal">1</b></div>
+      <div id="ticker" class="ticker"></div>
+    </section>
+
+    <section class="panel mid">
+      <div class="mid-head">
+        <h2>Upgrades <small id="upCount"></small></h2>
+        <div class="tools">
+          <button id="buyAll" title="Alle bezahlbaren Cookie-Upgrades kaufen">Alle kaufen</button>
+        </div>
+      </div>
+      <div class="filters" id="filters"></div>
+      <div id="upgrades" class="up-grid"></div>
+      <button id="moreUp" class="more hidden">Mehr anzeigen</button>
+      <div id="upEmpty" class="empty hidden">Noch keine Upgrades verfügbar – kauf Gebäude und backe mehr Kekse!</div>
+    </section>
+
+    <section class="panel right">
+      <div class="mid-head">
+        <h2>Gebäude</h2>
+        <div class="seg" id="amount">
+          <button data-n="1" class="on">1</button><button data-n="10">10</button><button data-n="100">100</button><button data-n="max">Max</button>
+        </div>
+      </div>
+      <div id="shop"></div>
+    </section>
+  </main>
+
+  <div id="tip" class="tip hidden"></div>
+  <div id="toasts"></div>
+  <dialog id="modal"><div class="modal-head"><h2 id="modalTitle"></h2><button id="modalClose" aria-label="Schließen">✕</button></div><div id="modalBody"></div></dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
