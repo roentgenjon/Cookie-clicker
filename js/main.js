@@ -173,7 +173,7 @@ function renderModal() {
       <span>Aufstiege</span><span>${game.ascensions}</span>
       <span>Himmelschips</span><span>${fmt(game.chipsAvailable)} frei / ${fmt(game.chipsEarned)} gesamt</span>
       <span>Spielzeit</span><span>${fmtTime((Date.now() - game.start) / 1000)}</span>
-      <span>Offline-Ertrag</span><span>${Math.round(game.offline * 100)} %</span></div>`;
+      <span>Offline-Ertrag</span><span>${Math.round(game.offline * 100)} % (max. ${fmtTime(game.offlineCap)})</span></div>`;
   } else if (modalKind === 'ach') {
     t.textContent = `🏆 Erfolge (${game.achCount()} / ${ACH.length})`;
     body.innerHTML = `<p class="note">Jeder Erfolg gibt +0,2 % auf deine Produktion.</p><div class="ach-grid">${ACH.map((a) => `<div class="ach ${game.ach[a.id] ? '' : 'off'}" title="${esc(a.name)} – ${esc(a.desc)}">${a.icon}</div>`).join('')}</div>`;
@@ -231,9 +231,12 @@ async function loadLb() {
 function cloudSave() { return cloud.save(game.name, game.serialize(), game.totalReset + game.total); }
 
 // ---------- Hauptschleife ----------
-let prev = performance.now(); let saveT = 0; let cloudT = 0; let slowT = 0;
+let prev = performance.now(); let lastWall = Date.now(); let saveT = 0; let cloudT = 0; let slowT = 0;
 function frame(now) {
   const dt = Math.min(1, (now - prev) / 1000); prev = now;
+  // Tab war im Hintergrund/Gerät im Standby: verpasste Zeit gutschreiben
+  const wall = Date.now(); const gap = (wall - lastWall) / 1000; lastWall = wall;
+  if (gap > 3) { const r = game.catchUp(gap - dt); if (r.gain > 0) toast(`😴 Während du weg warst (${fmtTime(r.offlineSecs)}): <b>+${fmt(r.gain)}</b> Kekse`); }
   game.tick(dt);
   $('#cookies').textContent = fmt(game.cookies);
   $('#cps').textContent = fmt(game.cps);

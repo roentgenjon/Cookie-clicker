@@ -1,7 +1,7 @@
 import { BUILDINGS, GROWTH, UPGRADES, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
-const OFFLINE_CAP = 8 * 3600;
+const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
 const toB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 const fromB64 = (str) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
@@ -31,7 +31,7 @@ export class Game {
     this.tierMult = new Array(n).fill(1);
     this.syn = Array.from({ length: n }, () => []);
     this.globalMult = 1; this.clickMult = 1; this.clickPct = 0;
-    this.gFreq = 1; this.gDur = 1; this.gReward = 1; this.gLucky = 0.15; this.gFrenzy = 7; this.offline = 0.5;
+    this.gFreq = 1; this.gDur = 1; this.gReward = 1; this.gLucky = 0.15; this.gFrenzy = 7; this.offline = 1; this.offlineCap = OFFLINE_CAP;
     this.upgradeCount = 0;
     for (let id = 0; id < TOTAL_UPGRADES; id++) {
       if (!this.bought[id]) continue;
@@ -53,7 +53,7 @@ export class Game {
           if (u.type === 0) this.globalMult *= 1.02;
           else if (u.type === 1) this.clickMult *= 1.05;
           else if (u.type === 2) this.gFreq = Math.max(0.2, this.gFreq * 0.99);
-          else this.offline = Math.min(1, this.offline + 0.01);
+          else this.offlineCap += 600;
           break;
         default: break;
       }
@@ -219,9 +219,14 @@ export class Game {
     this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = num(d.chipsSpent);
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     this.recalc();
-    const secs = Math.min(OFFLINE_CAP, Math.max(0, (Date.now() - this.last) / 1000));
+    return this.catchUp((Date.now() - this.last) / 1000, 30);
+  }
+
+  // Offline-/Hintergrund-Ertrag: Zeit seit der letzten Aktivität nachholen
+  catchUp(rawSecs, minSecs = 5) {
+    const secs = Math.min(this.offlineCap, Math.max(0, rawSecs));
     let gain = 0;
-    if (secs > 30 && this.baseCps > 0) { gain = this.baseCps * secs * this.offline; this.earn(gain); }
+    if (secs > minSecs && this.baseCps > 0) { gain = this.baseCps * secs * this.offline; this.earn(gain); }
     return { offlineSecs: secs, gain };
   }
 }

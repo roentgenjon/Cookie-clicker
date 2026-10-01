@@ -127,7 +127,7 @@ function build() {
       cost: Math.max(1, Math.round(Math.pow(1.0075, k))),
       name: `${['Himmlische Macht', 'Göttlicher Klick', 'Engelsglück', 'Ewige Ruhe'][type]} ${ROMAN((Math.floor(k / 4) % 50) + 1)}·${Math.floor(k / 200) + 1}`,
       icon: ['😇', '✨', '🪽', '🌙'][type],
-      desc: ['Gesamte Produktion ×1,02', 'Klickstärke ×1,05', 'Goldene Kekse 1 % häufiger', 'Offline-Ertrag +1 %'][type],
+      desc: ['Gesamte Produktion ×1,02', 'Klickstärke ×1,05', 'Goldene Kekse 1 % häufiger', 'Offline-Limit +10 Minuten'][type],
     });
   }
   return list;
