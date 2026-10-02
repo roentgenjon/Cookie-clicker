@@ -15,6 +15,12 @@ async function sha256(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+// Brute-Force-Schutz: max. 10 falsche Passwörter pro Konto in 10 Minuten
+async function tooManyFails(env, id) { return Number(await env.SAVES.get('f:' + id)) >= 10; }
+async function addFail(env, id) {
+  const n = Number(await env.SAVES.get('f:' + id)) + 1;
+  await env.SAVES.put('f:' + id, String(n), { expirationTtl: 600 });
+}
 const cleanName = (n) => String(n || 'Anonym').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16) || 'Anonym';
 
 export default {
@@ -40,10 +46,11 @@ export default {
         if (!ID_RE.test(b.id) || !SECRET_RE.test(b.secret)) return json(env, { error: 'Ungültige Zugangsdaten' }, 400);
         const data = JSON.stringify(b.data ?? null);
         if (data.length > MAX_DATA || data === 'null') return json(env, { error: 'Spielstand ungültig oder zu groß' }, 413);
+        if (await tooManyFails(env, b.id)) return json(env, { error: 'Zu viele Versuche – bitte 10 Minuten warten' }, 429);
         const hash = await sha256(b.secret);
         const key = 'p:' + b.id;
         const old = await env.SAVES.get(key, 'json');
-        if (old && old.h !== hash) return json(env, { error: 'Falscher Account-Code' }, 403);
+        if (old && old.h !== hash) { await addFail(env, b.id); return json(env, { error: 'Falsches Passwort (oder Name schon vergeben)' }, 403); }
         const score = Number(b.score);
         const s = Number.isFinite(score) && score > 0 ? score : 0;
         await env.SAVES.put(key, JSON.stringify({ h: hash, data: b.data, t: Date.now() }), { metadata: { n: cleanName(b.name), s } });
@@ -53,9 +60,10 @@ export default {
       if (url.pathname === '/api/load' && req.method === 'POST') {
         const b = await req.json();
         if (!ID_RE.test(b.id) || !SECRET_RE.test(b.secret)) return json(env, { error: 'Ungültige Zugangsdaten' }, 400);
+        if (await tooManyFails(env, b.id)) return json(env, { error: 'Zu viele Versuche – bitte 10 Minuten warten' }, 429);
         const rec = await env.SAVES.get('p:' + b.id, 'json');
         if (!rec) return json(env, { error: 'Kein Spielstand gefunden' }, 404);
-        if (rec.h !== (await sha256(b.secret))) return json(env, { error: 'Falscher Account-Code' }, 403);
+        if (rec.h !== (await sha256(b.secret))) { await addFail(env, b.id); return json(env, { error: 'Falsches Passwort (oder Name schon vergeben)' }, 403); }
         return json(env, { data: rec.data, t: rec.t });
       }
 

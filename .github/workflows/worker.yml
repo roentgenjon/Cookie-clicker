@@ -4,13 +4,31 @@ on:
     branches: [claude/cookie-clicker-game, main, master]
     paths: ['worker/**']
   workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cloudflare/wrangler-action@v3
+      - id: wrangler
+        uses: cloudflare/wrangler-action@v3
         with:
           workingDirectory: worker
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Worker-URL automatisch in config.js eintragen und die Webseite neu veröffentlichen
+      - name: URL in config.js eintragen
+        env:
+          URL_: ${{ steps.wrangler.outputs.deployment-url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$URL_" ] || { echo "Keine Worker-URL erhalten"; exit 1; }
+          URL_="${URL_%/}"
+          if grep -q "API_URL = '$URL_'" config.js; then echo "config.js ist aktuell"; exit 0; fi
+          printf "// URL des Cloudflare Workers (vom Worker-Workflow automatisch gesetzt).\nexport const API_URL = '%s';\n" "$URL_" > config.js
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add config.js && git commit -m "config: Worker-URL setzen"
+          git push
+          gh workflow run pages.yml --ref "${GITHUB_REF_NAME}"

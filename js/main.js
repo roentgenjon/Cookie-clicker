@@ -12,7 +12,7 @@ const game = new Game();
 let amount = 1;
 let filter = 'all';
 let shown = 80;
-let cloudAuto = ls.get('cc_auto') === '1';
+let localLast = 0;
 let particles = ls.get('cc_particles') !== '0';
 
 // ---------- Toasts ----------
@@ -27,7 +27,7 @@ const KEY = 'cookie_clicker_save_v1';
 function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(game.serialize())); } catch { /* ignore */ } }
 function loadLocal() {
   const raw = ls.get(KEY); if (!raw) return;
-  try { const r = game.load(JSON.parse(raw)); if (r.gain > 0) toast(`Willkommen zurück! Offline (${fmtTime(r.offlineSecs)}) gebacken: <b>${fmt(r.gain)}</b> Kekse`); } catch (e) { console.error(e); }
+  try { const d = JSON.parse(raw); localLast = d.last || 0; const r = game.load(d); if (r.gain > 0) toast(`Willkommen zurück! Offline (${fmtTime(r.offlineSecs)}) gebacken: <b>${fmt(r.gain)}</b> Kekse`); } catch (e) { console.error(e); }
 }
 loadLocal();
 $('#bakeryName').textContent = game.name;
@@ -207,19 +207,35 @@ function renderSettings() {
 }
 
 async function renderCloud() {
-  $('#modalTitle').textContent = '☁️ Cloud-Speicher & Rangliste';
+  $('#modalTitle').textContent = '☁️ Anmeldung & Rangliste';
   const body = $('#modalBody');
-  if (!cloud.enabled) { body.innerHTML = '<p>Die Cloud-API ist noch nicht konfiguriert (<code>config.js</code>).</p>'; return; }
-  body.innerHTML = `<div class="stack">
-    <p class="note">Dein Spielstand wird auf einem Cloudflare Worker (KV-Datenbank) gespeichert. Mit dem Account-Code kannst du auf anderen Geräten weiterspielen – gib ihn niemandem!</p>
-    <label>Account-Code<input type="text" id="code" value="${cloud.code}"></label>
-    <div class="rowf"><button id="cSave">☁️⬆️ Speichern</button><button id="cLoad">☁️⬇️ Laden</button><button id="cUse">🔑 Code übernehmen</button><button id="cAuto">Auto-Sync: ${cloudAuto ? 'an' : 'aus'}</button></div>
-    <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></div>`;
+  if (!cloud.enabled) { body.innerHTML = '<p>Die Cloud-Datenbank ist noch nicht verbunden. Du spielst vorerst nur mit lokalem Speichern.</p>'; return; }
   const msg = (t) => { const e = $('#cMsg'); if (e) e.textContent = t; };
-  $('#cSave').addEventListener('click', async () => { try { await cloudSave(); msg('Gespeichert ✔'); loadLb(); } catch (e) { msg('❌ ' + e.message); } });
-  $('#cLoad').addEventListener('click', async () => { try { const r = await cloud.load(); game.load(r.data); $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); msg('Geladen ✔'); } catch (e) { msg('❌ ' + e.message); } });
-  $('#cUse').addEventListener('click', () => { try { cloud.setCode($('#code').value); msg('Code übernommen – jetzt „Laden“ drücken.'); } catch (e) { msg('❌ ' + e.message); } });
-  $('#cAuto').addEventListener('click', () => { cloudAuto = !cloudAuto; ls.set('cc_auto', cloudAuto ? '1' : '0'); renderCloud(); });
+  if (!cloud.loggedIn) {
+    body.innerHTML = `<form class="stack" id="loginForm">
+      <p>Gib deinen <b>Namen</b> und ein <b>Passwort</b> ein. Neuer Name = neues Konto, bekannter Name = dein Fortschritt wird aus der Datenbank geladen.</p>
+      <label>Name<input type="text" id="lName" maxlength="16" autocomplete="username" value="${esc(game.name === 'Dein' ? '' : game.name)}"></label>
+      <label>Passwort<input type="password" id="lPass" autocomplete="current-password"></label>
+      <div class="rowf"><button type="submit" id="lGo">🔑 Anmelden / Registrieren</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
+      <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></form>`;
+    $('#lGuest').addEventListener('click', () => { ls.set('cc_guest', '1'); modal.close(); });
+    $('#loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault(); $('#lGo').disabled = true; msg('Anmelden…');
+      try {
+        const r = await cloud.login($('#lName').value, $('#lPass').value);
+        if (r.isNew) { game.name = cloud.name; await cloudSave(); toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
+        else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
+        $('#bakeryName').textContent = game.name; updateCloudBtn(); modal.close();
+      } catch (err) { msg('❌ ' + err.message); $('#lGo').disabled = false; }
+    });
+  } else {
+    body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.</p>
+      <div class="rowf"><button id="cSave">☁️⬆️ Jetzt speichern</button><button id="cLoad">☁️⬇️ Aus Cloud laden</button><button id="cOut">🚪 Abmelden</button></div>
+      <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></div>`;
+    $('#cSave').addEventListener('click', async () => { try { await cloudSave(); msg('Gespeichert ✔'); loadLb(); } catch (e) { msg('❌ ' + e.message); } });
+    $('#cLoad').addEventListener('click', async () => { try { const r = await cloud.load(); game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); msg('Geladen ✔'); } catch (e) { msg('❌ ' + e.message); } });
+    $('#cOut').addEventListener('click', async () => { try { await cloudSave(); } catch { /* egal */ } cloud.logout(); updateCloudBtn(); renderCloud(); });
+  }
   loadLb();
 }
 async function loadLb() {
@@ -229,7 +245,19 @@ async function loadLb() {
     box.innerHTML = r.players.length ? `<table class="lb"><tr><th>#</th><th>Bäckerei</th><th>Gebacken gesamt</th></tr>${r.players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${fmt(p.score)}</td></tr>`).join('')}</table>` : 'Noch keine Einträge.';
   } catch (e) { box.textContent = '❌ ' + e.message; }
 }
-function cloudSave() { return cloud.save(game.name, game.serialize(), game.totalReset + game.total); }
+function cloudSave(keepalive = false) { return cloud.save(game.serialize(), game.totalReset + game.total, keepalive); }
+function updateCloudBtn() { $('#cloudBtn').textContent = cloud.loggedIn ? `☁️ ${cloud.name}` : '☁️ Anmelden'; }
+updateCloudBtn();
+
+// Beim Start: angemeldet -> neueren Cloud-Stand übernehmen, sonst Anmeldung anbieten
+(async () => {
+  if (!cloud.enabled) return;
+  if (!cloud.loggedIn) { if (ls.get('cc_guest') !== '1') openModal('cloud'); return; }
+  try {
+    const r = await cloud.load();
+    if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (o.gain > 0) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
+  } catch (e) { if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
+})();
 
 // ---------- Hauptschleife ----------
 let prev = performance.now(); let lastWall = Date.now(); let saveT = 0; let cloudT = 0; let slowT = 0;
@@ -252,10 +280,10 @@ function frame(now) {
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; for (const a of game.checkAchievements()) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
-  if (cloudAuto && cloud.enabled && cloudT >= 90) { cloudT = 0; cloudSave().catch(() => {}); }
+  if (cloud.loggedIn && cloudT >= 30) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 setInterval(saveLocal, 15000);
 addEventListener('beforeunload', saveLocal);
-document.addEventListener('visibilitychange', () => { if (document.hidden) saveLocal(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { saveLocal(); if (cloud.loggedIn) cloudSave(true).catch(() => {}); } });
