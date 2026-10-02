@@ -35,4 +35,6 @@ const g6 = new Game(); g6.nextGolden = 0; g6.tick(1); assert.ok(g6.gc); assert.o
 const g7 = new Game(); g7.owned[1] = 10; g7.recalc();
 const r = g7.catchUp(3600); assert.ok(Math.abs(r.gain - g7.baseCps * 3600) < 1e-6);
 assert.equal(g7.catchUp(1e9).offlineSecs, 24 * 3600);
+const g8 = new Game(); g8.chipsEarned = 50; g8.recalc();
+const n8 = g8.buyAllAffordable(true); assert.ok(n8 > 5 && g8.chipsAvailable >= 0, 'himmlische alle kaufen');
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));

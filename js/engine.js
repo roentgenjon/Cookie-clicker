@@ -131,9 +131,10 @@ export class Game {
     this.recalc();
     return true;
   }
-  buyAllAffordable() {
+  // heaven=true: himmlische Upgrades (Chips), sonst Cookie-Upgrades
+  buyAllAffordable(heaven = false) {
     let n = 0;
-    for (const id of this.visibleUpgrades(false)) { if (this.cookies >= UPGRADES[id].cost && this.buyUpgrade(id)) n++; }
+    for (const id of this.visibleUpgrades(heaven)) if (this.canAfford(id) && this.buyUpgrade(id)) n++;
     return n;
   }
 

@@ -100,7 +100,8 @@ const FILTERS = [['all', 'Alle'], ['tier', 'Gebäude'], ['click', 'Klick'], ['gl
 $('#filters').innerHTML = FILTERS.map(([k, t]) => `<button data-f="${k}" class="${k === filter ? 'on' : ''}">${t}</button>`).join('');
 $('#filters').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; filter = b.dataset.f; shown = 80; [...$('#filters').children].forEach((c) => c.classList.toggle('on', c === b)); lastKey = ''; });
 $('#moreUp').addEventListener('click', () => { shown += 120; lastKey = ''; });
-$('#buyAll').addEventListener('click', () => { const n = game.buyAllAffordable(); toast(n ? `${n} Upgrades gekauft` : 'Nichts bezahlbar'); lastKey = ''; });
+$('#buyAll').addEventListener('click', () => { const n = (filter === 'heaven' ? 0 : game.buyAllAffordable(false)) + (filter === 'heaven' || filter === 'all' ? game.buyAllAffordable(true) : 0);
+  toast(n ? `${n} Upgrades gekauft` : 'Nichts bezahlbar'); lastKey = ''; });
 $('#upgrades').addEventListener('click', (e) => { const b = e.target.closest('.up'); if (b && game.buyUpgrade(+b.dataset.id)) { lastKey = ''; hideTip(); } });
 let lastKey = '';
 function renderUpgrades() {
