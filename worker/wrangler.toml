@@ -1,3 +1,4 @@
+# Deploy läuft über .github/workflows/worker.yml (Wrangler 4)
 name = "cookie-clicker-api"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
