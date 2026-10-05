@@ -20,11 +20,16 @@ const cleanName = (n) => String(n || 'Anonym').replace(/[\u0000-\u001f<>]/g, '')
 const rid = () => crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), '');
 
 // ---- Admins: Namen aus env.ADMINS, ID = sha256('id:'+name).slice(0,16) (wie im Client) ----
-async function adminMap(env) {
+async function superMap(env) { // feste Admins aus env.ADMINS (dürfen weitere Admins ernennen)
   const map = {};
-  for (const n of (env.ADMINS || '').split(',').map((s) => s.trim()).filter(Boolean)) map[(await sha256('id:' + n.toLowerCase())).slice(0, 16)] = n;
+  for (const n of (env.ADMINS || '').split(',').map((x) => x.trim()).filter(Boolean)) map[(await sha256('id:' + n.toLowerCase())).slice(0, 16)] = n;
   return map;
 }
+async function adminMap(env) { // feste + ernannte Admins
+  return { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
+}
+const nameToId = async (name) => (await sha256('id:' + String(name).trim().toLowerCase())).slice(0, 16);
+const today = () => new Date().toISOString().slice(0, 10);
 
 // Brute-Force-Schutz
 async function tooManyFails(env, id) { return Number(await env.SAVES.get('f:' + id)) >= 10; }
@@ -79,11 +84,22 @@ const chatLoad = async (env) => (await env.SAVES.get('chat', 'json')) || [];
 const chatSave = (env, list) => env.SAVES.put('chat', JSON.stringify(list.slice(-CHAT_MAX)));
 const chatPublic = (list) => list.map(({ i, t, n, a, x }) => ({ i, t, n, a, x }));
 
+// ---- Zeitplan: fällige Einträge werden beim nächsten Abruf eines Spielers ausgeführt ----
+async function runSched(env) {
+  const list = (await env.SAVES.get('sched', 'json')) || [];
+  const now = Date.now(); const due = list.filter((x) => x.at <= now);
+  if (!due.length) return;
+  await env.SAVES.put('sched', JSON.stringify(list.filter((x) => x.at > now))); // zuerst entfernen (verhindert Doppelausführung)
+  const bc = (await env.SAVES.get('bc', 'json')) || [];
+  for (const x of due) if (!bc.some((y) => y.eid === x.eid)) bc.push({ t: now, text: x.text || '', event: x.event || null, from: x.from, eid: x.eid });
+  await env.SAVES.put('bc', JSON.stringify(bc.slice(-10)));
+}
+
 async function listPlayers(env) {
   const list = await env.SAVES.list({ prefix: 'p:', limit: 1000 });
   const bans = new Set((await env.SAVES.list({ prefix: 'ban:', limit: 1000 })).keys.map((k) => k.name.slice(4)));
   const mutes = new Set((await env.SAVES.list({ prefix: 'mute:', limit: 1000 })).keys.map((k) => k.name.slice(5)));
-  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
+  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, cps: k.metadata.c || 0, asc: k.metadata.a || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
 }
 
 async function admin(env, b) {
@@ -125,6 +141,37 @@ async function admin(env, b) {
       await env.SAVES.put('bc', JSON.stringify(bc.slice(-10)));
       return json(env, { ok: true });
     }
+    case 'adminList': {
+      const sup = await superMap(env); if (!sup[b.id]) return fail(env, 'Nur feste Admins dürfen das', 403);
+      const extra = (await env.SAVES.get('admins', 'json')) || {};
+      return json(env, { fixed: Object.values(sup), extra: Object.entries(extra).filter(([id]) => !sup[id]).map(([id, name]) => ({ id, name })) });
+    }
+    case 'adminAdd': {
+      const sup = await superMap(env); if (!sup[b.id]) return fail(env, 'Nur feste Admins dürfen das', 403);
+      const id = await nameToId(b.name || '');
+      const rec = await env.SAVES.getWithMetadata('p:' + id, 'text');
+      if (!rec.value) return fail(env, 'Spieler nicht gefunden (er muss ein Konto haben)', 404);
+      const extra = (await env.SAVES.get('admins', 'json')) || {}; extra[id] = (rec.metadata || {}).n || String(b.name);
+      await env.SAVES.put('admins', JSON.stringify(extra)); return json(env, { ok: true });
+    }
+    case 'adminDel': {
+      const sup = await superMap(env); if (!sup[b.id]) return fail(env, 'Nur feste Admins dürfen das', 403);
+      const extra = (await env.SAVES.get('admins', 'json')) || {}; delete extra[target];
+      await env.SAVES.put('admins', JSON.stringify(extra)); return json(env, { ok: true });
+    }
+    case 'schedList': return json(env, { items: ((await env.SAVES.get('sched', 'json')) || []).sort((x, y) => x.at - y.at), now: Date.now() });
+    case 'schedAdd': {
+      const at = Number(b.at); if (!Number.isFinite(at) || at < Date.now() - 60000 || at > Date.now() + 1000 * 60 * 60 * 24 * 60) return fail(env, 'Ungültige Zeit (max. 60 Tage in der Zukunft)');
+      let ev = null; if (b.event) { ev = cleanEvent(b.event); if (!ev || ev.type === 'reset') return fail(env, 'Ungültiges Ereignis'); }
+      const text = typeof b.text === 'string' ? b.text.replace(/[<>]/g, '').slice(0, 140) : '';
+      if (!text && !ev) return fail(env, 'Leere Nachricht');
+      const list = (await env.SAVES.get('sched', 'json')) || []; if (list.length >= 30) return fail(env, 'Maximal 30 geplante Einträge');
+      list.push({ at, text, event: ev, from: me, eid: rid() }); await env.SAVES.put('sched', JSON.stringify(list)); return json(env, { ok: true });
+    }
+    case 'schedDel': {
+      const list = (await env.SAVES.get('sched', 'json')) || [];
+      await env.SAVES.put('sched', JSON.stringify(list.filter((x) => x.eid !== b.eid))); return json(env, { ok: true });
+    }
     case 'chatDel': {
       const list = await chatLoad(env);
       await chatSave(env, list.filter((m) => m.i !== Number(b.mid)));
@@ -162,8 +209,40 @@ export default {
       if (url.pathname === '/api/health') return json(env, { ok: true });
 
       if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
-        const players = (await listPlayers(env)).filter((p) => !p.banned).sort((a, b) => b.score - a.score).slice(0, 25).map((p) => ({ name: p.name, score: p.score }));
-        return json(env, { players });
+        const by = ['score', 'cps', 'asc'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';
+        const ranked = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y[by] - x[by]);
+        const players = ranked.slice(0, 25).map((p) => ({ name: p.name, score: p.score, value: p[by] }));
+        const myId = url.searchParams.get('id'); let me = null;
+        if (myId && ID_RE.test(myId)) { const i = ranked.findIndex((p) => p.id === myId); if (i >= 0) me = { rank: i + 1, name: ranked[i].name, value: ranked[i][by] }; }
+        return json(env, { players, me, by, total: ranked.length });
+      }
+
+      // Spielerliste (nur Namen) für Geschenke
+      if (url.pathname === '/api/players' && req.method === 'GET') {
+        const list = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y.updated - x.updated).slice(0, 300);
+        return json(env, { players: list.map((p) => p.name) });
+      }
+
+      // Geschenk: Kekse an einen anderen Spieler (Betrag max. 50 % des zuletzt gespeicherten Vorrats, 5 pro Tag)
+      if (url.pathname === '/api/gift' && req.method === 'POST') {
+        const b = await req.json();
+        const au = await authenticate(env, b);
+        if (au.err) return au.err;
+        const toId = await nameToId(b.to || '');
+        if (toId === b.id) return fail(env, 'Du kannst dir nicht selbst etwas schenken.');
+        const target = await env.SAVES.getWithMetadata('p:' + toId, 'text');
+        if (!target.value) return fail(env, 'Spieler nicht gefunden', 404);
+        if (await env.SAVES.get('ban:' + toId)) return fail(env, 'Dieser Spieler kann nichts empfangen.');
+        const amount = Number(b.amount);
+        if (!Number.isFinite(amount) || amount < 1) return fail(env, 'Ungültiger Betrag');
+        const saved = Number((au.rec.data || {}).cookies) || 0;
+        if (amount > saved * 0.5) return fail(env, 'Du kannst höchstens die Hälfte deiner Kekse verschenken.');
+        const key = `gift:${b.id}:${today()}`; const used = Number(await env.SAVES.get(key)) || 0;
+        if (used >= 5) return fail(env, 'Heute hast du schon 5 Geschenke gemacht.', 429);
+        await env.SAVES.put(key, String(used + 1), { expirationTtl: 60 * 60 * 48 });
+        const meta = (await env.SAVES.getWithMetadata('p:' + b.id, 'text')).metadata || {};
+        await pushEvent(env, toId, { type: 'cookies', amount, gift: true }, meta.n || 'Jemand');
+        return json(env, { ok: true, left: 4 - used, to: (target.metadata || {}).n });
       }
 
       if (url.pathname === '/api/save' && req.method === 'PUT') {
@@ -182,7 +261,8 @@ export default {
         }
         const score = Number(b.score);
         const s = Number.isFinite(score) && score > 0 ? score : 0;
-        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, u: Date.now() } });
+        const st = b.stats || {}; const c = Number(st.cps), asc = Number(st.asc);
+        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
         return json(env, { ok: true });
       }
 
@@ -197,6 +277,7 @@ export default {
         const b = await req.json();
         const au = await authenticate(env, b);
         if (au.err) return au.err;
+        await runSched(env);
         const key = 'q:' + b.id;
         const q = (await env.SAVES.get(key, 'json')) || [];
         if (q.length) await env.SAVES.delete(key);

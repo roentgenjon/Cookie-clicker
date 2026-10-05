@@ -1,3 +1,4 @@
+import { SKINS, skinById, dayKey, yesterdayKey, genTasks } from './extras.js';
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
@@ -45,6 +46,8 @@ export class Game {
     this.ach = new Uint8Array(ACH.length);
     this.ascensions = 0; this.chipsEarned = 0; this.chipsSpent = 0;
     this.start = Date.now(); this.last = Date.now();
+    this.skin = 'classic';
+    this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 }, claimed: [], streak: 0, lastDone: '' };
     this.buffs = []; this.gcs = []; this.gid = 0; this.nextGolden = 60;
     this.recalc();
   }
@@ -118,7 +121,7 @@ export class Game {
     if (!(amount > 0)) return false;
     const cost = this.buildingCost(i, amount);
     if (cost > this.cookies + 1e-9) return false;
-    this.cookies -= cost; this.owned[i] += amount;
+    this.cookies -= cost; this.owned[i] += amount; this.daily.prog.buildings += amount;
     this.updateCps();
     return true;
   }
@@ -158,7 +161,7 @@ export class Game {
   buyUpgrade(id, defer = false) {
     if (!this.isVisible(id) || !this.canAfford(id)) return false;
     if (KIND[id] === K.HEAVEN) this.chipsSpent += COST[id]; else this.cookies -= COST[id];
-    this.bought[id] = 1; this.applyOne(id);
+    this.bought[id] = 1; this.applyOne(id); this.daily.prog.upgrades++;
     if (!defer) this.updateCps();
     return true;
   }
@@ -176,8 +179,34 @@ export class Game {
   }
 
   // ---- Aktionen ----
-  earn(x) { this.cookies += x; this.total += x; }
-  click() { const v = this.clickValue; this.earn(v); this.clicks++; return v; }
+  earn(x) { this.cookies += x; this.total += x; this.daily.prog.baked += x; }
+  click() { const v = this.clickValue; this.earn(v); this.clicks++; this.daily.prog.clicks++; return v; }
+
+  // ---- Tägliche Aufgaben & Skins ----
+  ensureDaily() {
+    const today = dayKey(); const d = this.daily;
+    if (d.date === today) return false;
+    d.date = today; d.tasks = genTasks(today, this.baseCps || 0); d.claimed = []; d.prog = { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 };
+    return true;
+  }
+  get streak() { const d = this.daily; return d.lastDone === dayKey() || d.lastDone === yesterdayKey() ? d.streak : 0; }
+  dailyRewardCookies() { return Math.max(1000, this.baseCps * 600) * (1 + 0.1 * Math.min(this.streak, 10)); }
+  dailyState() { const d = this.daily; return d.tasks.map((t, i) => ({ ...t, i, prog: Math.min(t.target, d.prog[t.type] || 0), done: (d.prog[t.type] || 0) >= t.target, claimed: d.claimed.includes(i) })); }
+  claimableCount() { return this.dailyState().filter((t) => t.done && !t.claimed).length; }
+  claimDaily(i) {
+    const t = this.dailyState()[i]; if (!t || !t.done || t.claimed) return null;
+    const reward = this.dailyRewardCookies(); this.cookies += reward; this.daily.claimed.push(i);
+    let bonus = null;
+    if (this.daily.claimed.length >= this.daily.tasks.length && this.daily.lastDone !== dayKey()) {
+      this.daily.streak = this.daily.lastDone === yesterdayKey() ? this.daily.streak + 1 : 1; this.daily.lastDone = dayKey();
+      for (let k = 0; k < 3; k++) this.spawnGolden(null);
+      bonus = this.dailyRewardCookies() * 3; this.cookies += bonus;
+    }
+    return { reward, bonus };
+  }
+  unlockStats() { return { ach: this.achCount(), golden: this.golden, totalAll: this.totalReset + this.total, ascensions: this.ascensions, upgrades: this.upgradeCount, buildings: this.owned.reduce((a, b) => a + b, 0), clicks: this.clicks, chips: this.chipsEarned }; }
+  unlockedSkins() { const st = this.unlockStats(); return SKINS.filter((k) => k.need(st)).map((k) => k.id); }
+  setSkin(id) { if (this.unlockedSkins().includes(id)) { this.skin = id; return true; } return false; }
 
   tick(dt) {
     const now = Date.now();
@@ -201,7 +230,7 @@ export class Game {
   clickGolden(id) {
     const i = this.gcs.findIndex((g) => g.id === id);
     if (i < 0) return null;
-    const [gc] = this.gcs.splice(i, 1); this.golden++;
+    const [gc] = this.gcs.splice(i, 1); this.golden++; this.daily.prog.golden++;
     let effect = gc.effect;
     if (!effect) { const r = Math.random(); effect = r < 0.5 ? 'frenzy' : r < 0.8 ? 'lucky' : r < 0.95 ? 'click' : 'jackpot'; }
     const rw = this.gReward; const now = Date.now(); let msg;
@@ -260,6 +289,7 @@ export class Game {
 
   // ---- Erfolge ----
   checkAchievements() {
+    this.ensureDaily();
     const s = { owned: this.owned, totalAll: this.totalReset + this.total, cps: this.baseCps, clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
@@ -272,7 +302,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies, total: this.total, totalReset: this.totalReset, clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(),
+      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily,
     };
   }
   load(d) {
@@ -287,6 +317,12 @@ export class Game {
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
     this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
+    if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
+    const dl = d.daily;
+    if (dl && typeof dl.date === 'string' && Array.isArray(dl.tasks)) {
+      this.daily = { date: dl.date, tasks: dl.tasks.filter((t) => t && typeof t.type === 'string' && Number.isFinite(t.target)).slice(0, 3), claimed: Array.isArray(dl.claimed) ? dl.claimed.filter(Number.isInteger) : [], streak: num(dl.streak), lastDone: typeof dl.lastDone === 'string' ? dl.lastDone : '',
+        prog: { clicks: num(dl.prog && dl.prog.clicks), golden: num(dl.prog && dl.prog.golden), buildings: num(dl.prog && dl.prog.buildings), upgrades: num(dl.prog && dl.prog.upgrades), baked: num(dl.prog && dl.prog.baked) } };
+    }
     this.recalc();
     return this.catchUp((Date.now() - this.last) / 1000, 30);
   }
