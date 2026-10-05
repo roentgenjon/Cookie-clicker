@@ -54,5 +54,7 @@ export const cloud = {
   events(since) { return post('/api/events', 'POST', { id: this.id, secret: this.secret, since }); },
   admin(action, extra = {}) { return post('/api/admin', 'POST', { id: this.id, secret: this.secret, action, ...extra }); },
   load() { return post('/api/load', 'POST', { id: this.id, secret: this.secret }); },
+  chat() { return req('/api/chat'); },
+  chatSend(text) { return post('/api/chat/send', 'POST', { id: this.id, secret: this.secret, text }); },
   leaderboard() { return req('/api/leaderboard'); },
 };
