@@ -1,12 +1,35 @@
-import { BUILDINGS, GROWTH, UPGRADES, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, buildAchievements } from './data.js';
+import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
-const toB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
+const toB64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s); };
 const fromB64 = (str) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
-const packBits = (arr) => { const out = new Uint8Array(Math.ceil(arr.length / 8)); arr.forEach((v, i) => { if (v) out[i >> 3] |= 1 << (i & 7); }); return toB64(out); };
-const unpackBits = (str, len) => { const bytes = fromB64(str); const out = new Uint8Array(len); for (let i = 0; i < len; i++) out[i] = (bytes[i >> 3] >> (i & 7)) & 1; return out; };
+const rawPack = (arr) => { const out = new Uint8Array(Math.ceil(arr.length / 8)); for (let i = 0; i < arr.length; i++) if (arr[i]) out[i >> 3] |= 1 << (i & 7); return toB64(out); };
+const rawUnpack = (str, len) => { const bytes = fromB64(str); const out = new Uint8Array(len); for (let i = 0; i < len; i++) out[i] = ((bytes[i >> 3] || 0) >> (i & 7)) & 1; return out; };
+// Lauflängen-Kodierung: abwechselnd Anzahl 0er / 1er, als Varints. Format "r:<base64>"; roh = "b:<base64>"
+function packBits(arr) {
+  const bytes = []; let cur = 0, run = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if ((arr[i] ? 1 : 0) === cur) { run++; continue; }
+    let v = run; while (v >= 128) { bytes.push((v & 127) | 128); v >>>= 7; } bytes.push(v); cur ^= 1; run = 1;
+  }
+  let v = run; while (v >= 128) { bytes.push((v & 127) | 128); v >>>= 7; } bytes.push(v);
+  const rle = 'r:' + toB64(Uint8Array.from(bytes));
+  const raw = 'b:' + rawPack(arr);
+  return rle.length <= raw.length ? rle : raw;
+}
+function unpackBits(str, len) {
+  if (str.startsWith('r:')) {
+    const bytes = fromB64(str.slice(2)); const out = new Uint8Array(len); let pos = 0, cur = 0, i = 0;
+    while (i < bytes.length) {
+      let v = 0, sh = 0; while (bytes[i] & 128) { v |= (bytes[i++] & 127) << sh; sh += 7; } v |= bytes[i++] << sh;
+      if (cur) out.fill(1, pos, Math.min(len, pos + v)); pos += v; cur ^= 1;
+    }
+    return out;
+  }
+  return rawUnpack(str.startsWith('b:') ? str.slice(2) : str, len);
+}
 
 export class Game {
   constructor() {
@@ -18,6 +41,7 @@ export class Game {
     this.cookies = 0; this.total = 0; this.totalReset = 0; this.clicks = 0; this.golden = 0;
     this.owned = new Array(BUILDINGS.length).fill(0);
     this.bought = new Uint8Array(TOTAL_UPGRADES);
+    this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.ascensions = 0; this.chipsEarned = 0; this.chipsSpent = 0;
     this.start = Date.now(); this.last = Date.now();
@@ -26,38 +50,40 @@ export class Game {
   }
 
   // ---- Berechnung aller Boni ----
-  recalc() {
+  resetAgg() {
     const n = BUILDINGS.length;
     this.tierMult = new Array(n).fill(1);
-    this.syn = Array.from({ length: n }, () => []);
+    this.synW = Array.from({ length: n }, () => new Array(n).fill(0)); // Synergie-Gewichte [A][B]
     this.globalMult = 1; this.clickMult = 1; this.clickPct = 0;
     this.gFreq = 1; this.gDur = 1; this.gReward = 1; this.gLucky = 0.15; this.gFrenzy = 7; this.offline = 1; this.offlineCap = OFFLINE_CAP;
     this.upgradeCount = 0;
-    for (let id = 0; id < TOTAL_UPGRADES; id++) {
-      if (!this.bought[id]) continue;
-      this.upgradeCount++;
-      const u = UPGRADES[id];
-      switch (u.kind) {
-        case 'tier': this.tierMult[u.b] *= u.mult; break;
-        case 'click': this.clickMult *= u.mult || 1; this.clickPct += u.add || 0; break;
-        case 'global': this.globalMult *= u.mult; break;
-        case 'syn': this.syn[u.a].push([u.b, u.level]); break;
-        case 'golden':
-          if (u.type === 0) this.gFreq = Math.max(0.2, this.gFreq * 0.99);
-          else if (u.type === 1) this.gDur *= 1.02;
-          else if (u.type === 2) this.gReward *= 1.02;
-          else if (u.type === 3) this.gLucky += 0.02;
-          else this.gFrenzy *= 1.01;
-          break;
-        case 'heaven':
-          if (u.type === 0) this.globalMult *= 1.02;
-          else if (u.type === 1) this.clickMult *= 1.05;
-          else if (u.type === 2) this.gFreq = Math.max(0.2, this.gFreq * 0.99);
-          else this.offlineCap += 600;
-          break;
-        default: break;
-      }
+  }
+  // Wirkung eines einzelnen gekauften Upgrades auf die Summen
+  applyOne(id) {
+    this.upgradeCount++;
+    const p1 = P1[id];
+    switch (KIND[id]) {
+      case K.TIER: this.tierMult[p1] *= LEVEL[id] <= 10 ? EFFECT.tierBig : EFFECT.tierSmall; break;
+      case K.CLICK: if (p1) this.clickPct += EFFECT.clickPct; else this.clickMult *= EFFECT.click; break;
+      case K.GLOBAL: this.globalMult *= EFFECT.global; break;
+      case K.SYN: this.synW[p1][P2[id]] += EFFECT.syn; break;
+      case K.GOLDEN:
+        if (p1 === 0) this.gFreq = Math.max(0.2, this.gFreq * EFFECT.gFreq);
+        else if (p1 === 1) this.gDur *= EFFECT.gDur;
+        else if (p1 === 2) this.gReward *= EFFECT.gReward;
+        else if (p1 === 3) this.gLucky += EFFECT.gLucky;
+        else this.gFrenzy *= EFFECT.gFrenzy;
+        break;
+      default:
+        if (p1 === 0) this.globalMult *= EFFECT.hGlobal;
+        else if (p1 === 1) this.clickMult *= EFFECT.hClick;
+        else if (p1 === 2) this.gFreq = Math.max(0.2, this.gFreq * EFFECT.hFreq);
+        else this.offlineCap += EFFECT.hOffline;
     }
+  }
+  recalc() {
+    this.resetAgg();
+    for (let id = 0; id < TOTAL_UPGRADES; id++) if (this.bought[id]) this.applyOne(id);
     this.updateCps();
   }
 
@@ -67,8 +93,8 @@ export class Game {
     let sum = 0;
     for (let b = 0; b < BUILDINGS.length; b++) {
       if (!this.owned[b]) continue;
-      let syn = 1;
-      for (const [o, lvl] of this.syn[b]) syn += 0.0005 * lvl * this.owned[o];
+      let syn = 1; const w = this.synW[b];
+      for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum += BUILDINGS[b].cps * this.owned[b] * this.tierMult[b] * syn;
     }
     this.baseCps = sum * this.globalMult * (1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount());
@@ -106,35 +132,46 @@ export class Game {
   // ---- Upgrades ----
   isVisible(id) {
     if (this.bought[id]) return false;
-    const u = UPGRADES[id];
-    switch (u.kind) {
-      case 'tier': return this.owned[u.b] >= u.need;
-      case 'syn': return this.owned[u.a] >= u.need && this.owned[u.b] >= u.need;
-      case 'golden': return this.golden >= u.goldReq && this.total >= u.cost / 10;
-      case 'heaven': return this.chipsEarned >= Math.ceil(u.cost / 2);
-      default: return this.total >= u.cost / 10;
+    switch (KIND[id]) {
+      case K.TIER: return this.owned[P1[id]] >= NEED[id];
+      case K.SYN: return this.owned[P1[id]] >= NEED[id] && this.owned[P2[id]] >= NEED[id];
+      case K.GOLDEN: return this.golden >= NEED[id] && this.total >= COST[id] / 10;
+      case K.HEAVEN: return this.chipsEarned >= Math.ceil(COST[id] / 2);
+      default: return this.total >= COST[id] / 10;
     }
   }
-  canAfford(id) { const u = UPGRADES[id]; return u.kind === 'heaven' ? this.chipsAvailable >= u.cost : this.cookies >= u.cost; }
+  canAfford(id) { return KIND[id] === K.HEAVEN ? this.chipsAvailable >= COST[id] : this.cookies >= COST[id]; }
   get chipsAvailable() { return this.chipsEarned - this.chipsSpent; }
-  visibleUpgrades(heaven) {
-    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE;
-    const out = [];
-    for (const id of order) if (this.isVisible(id)) out.push(id);
-    return out;
+  // Sichtbare Upgrades (nach Preis sortiert): liefert die ersten `limit` IDs und die Gesamtzahl. kind = null oder Typ-Nummer.
+  visibleList(heaven, kind = null, limit = 100) {
+    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; const ids = []; let total = 0;
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      if (kind !== null && KIND[id] !== kind) continue;
+      if (!this.isVisible(id)) continue;
+      if (ids.length < limit) ids.push(id);
+      total++;
+    }
+    return { ids, total };
   }
-  buyUpgrade(id) {
+  // defer=true: Gesamtproduktion erst später neu berechnen (für Sammelkäufe)
+  buyUpgrade(id, defer = false) {
     if (!this.isVisible(id) || !this.canAfford(id)) return false;
-    const u = UPGRADES[id];
-    if (u.kind === 'heaven') this.chipsSpent += u.cost; else this.cookies -= u.cost;
-    this.bought[id] = 1;
-    this.recalc();
+    if (KIND[id] === K.HEAVEN) this.chipsSpent += COST[id]; else this.cookies -= COST[id];
+    this.bought[id] = 1; this.applyOne(id);
+    if (!defer) this.updateCps();
     return true;
   }
-  // heaven=true: himmlische Upgrades (Chips), sonst Cookie-Upgrades
-  buyAllAffordable(heaven = false) {
-    let n = 0;
-    for (const id of this.visibleUpgrades(heaven)) if (this.canAfford(id) && this.buyUpgrade(id)) n++;
+  // heaven=true: himmlische Upgrades (Chips), sonst Cookie-Upgrades; kind = null oder Typ-Nummer
+  buyAllAffordable(heaven = false, kind = null) {
+    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; let n = 0;
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      if (!heaven && COST[id] > this.cookies) break; // nach Preis sortiert
+      if (kind !== null && KIND[id] !== kind) continue;
+      if (this.canAfford(id) && this.buyUpgrade(id, true)) n++;
+    }
+    if (n) this.updateCps();
     return n;
   }
 
@@ -215,7 +252,7 @@ export class Game {
     this.totalReset += this.total; this.chipsEarned += gain; this.ascensions++;
     this.cookies = 0; this.total = 0;
     this.owned.fill(0);
-    for (let i = 0; i < HEAVEN_START; i++) this.bought[i] = 0;
+    this.bought.fill(0, 0, HEAVEN_START);
     this.buffs = []; this.gcs = []; this.nextGolden = 60;
     this.recalc();
     return true;
@@ -233,7 +270,7 @@ export class Game {
   // ---- Speichern ----
   serialize() {
     return {
-      v: 1, name: this.name, cookies: this.cookies, total: this.total, totalReset: this.totalReset, clicks: this.clicks, golden: this.golden,
+      v: 2, name: this.name, cookies: this.cookies, total: this.total, totalReset: this.totalReset, clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
       chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(),
     };
@@ -245,9 +282,10 @@ export class Game {
     this.cookies = num(d.cookies); this.total = num(d.total); this.totalReset = num(d.totalReset);
     this.clicks = num(d.clicks); this.golden = num(d.golden);
     if (Array.isArray(d.owned)) this.owned = BUILDINGS.map((_, i) => Math.floor(num(d.owned[i])));
-    if (typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
+    // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
+    if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = num(d.chipsSpent);
+    this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     this.recalc();
     return this.catchUp((Date.now() - this.last) / 1000, 30);

@@ -126,7 +126,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!sel) { note = '⚠️ Erst einen Spieler auswählen'; return paint(); }
         try {
           const d = await call('inspect', { target: sel });
-          info = `Name: ${d.name}\nKekse: ${fmt(d.cookies || 0)} · gebacken (Runde): ${fmt(d.total || 0)} · früher: ${fmt(d.totalReset || 0)}\nKlicks: ${fmt(d.clicks || 0)} · goldene Kekse: ${d.golden || 0}\nGebäude: ${(d.owned || []).map((n, i) => n ? `${BUILDINGS[i].name} ${n}` : '').filter(Boolean).join(', ') || '–'}\nUpgrades: ${d.upgrades}/10000 · Erfolge: ${d.achievements}\nAufstiege: ${d.ascensions || 0} · Chips: ${d.chipsEarned || 0} (ausgegeben ${d.chipsSpent || 0})\nLetzte Speicherung: ${new Date(d.lastSave).toLocaleString('de-DE')}${d.banned ? '\n🚫 GESPERRT' : ''}`;
+          info = `Name: ${d.name}\nKekse: ${fmt(d.cookies || 0)} · gebacken (Runde): ${fmt(d.total || 0)} · früher: ${fmt(d.totalReset || 0)}\nKlicks: ${fmt(d.clicks || 0)} · goldene Kekse: ${d.golden || 0}\nGebäude: ${(d.owned || []).map((n, i) => n ? `${BUILDINGS[i].name} ${n}` : '').filter(Boolean).join(', ') || '–'}\nUpgrades: ${d.upgrades}/400000 · Erfolge: ${d.achievements}\nAufstiege: ${d.ascensions || 0} · Chips: ${d.chipsEarned || 0} (ausgegeben ${d.chipsSpent || 0})\nLetzte Speicherung: ${new Date(d.lastSave).toLocaleString('de-DE')}${d.banned ? '\n🚫 GESPERRT' : ''}`;
         } catch { return; }
         return paint();
       }

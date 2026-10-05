@@ -1,4 +1,4 @@
-// Spieldaten: Gebäude, 10.000 Upgrades und Erfolge werden deterministisch erzeugt.
+// Spieldaten: Gebäude, 400.000 Upgrades (kompakte Datenfelder, Namen werden bei Bedarf erzeugt) und Erfolge.
 
 export const BUILDINGS = [
   { name: 'Cursor', icon: '👆', base: 15, cps: 0.1 },
@@ -19,125 +19,94 @@ export const BUILDINGS = [
 ];
 export const GROWTH = 1.15;
 
-export const COUNTS = { tier: 2850, click: 1500, global: 2500, syn: 1050, golden: 850, heaven: 1250 };
-export const TOTAL_UPGRADES = 10000;
-export const HEAVEN_START = TOTAL_UPGRADES - COUNTS.heaven; // ab hier: himmlische Upgrades (Chips)
+// ---- Upgrades: 400.000 Stück, als kompakte Typed Arrays gespeichert ----
+export const COUNTS = { tier: 114000, click: 60000, global: 100000, syn: 42000, golden: 34000, heaven: 50000 };
+export const TOTAL_UPGRADES = 400000;
+export const PER_BUILDING = COUNTS.tier / BUILDINGS.length; // 7.600 je Gebäude
+export const SYN_LEVELS = COUNTS.syn / (BUILDINGS.length * (BUILDINGS.length - 1)); // 200
+export const K = { TIER: 0, CLICK: 1, GLOBAL: 2, SYN: 3, GOLDEN: 4, HEAVEN: 5 };
+export const KIND_NAMES = ['tier', 'click', 'global', 'syn', 'golden', 'heaven'];
+const START = {}; { let o = 0; for (const [n, c] of Object.entries(COUNTS)) { START[n] = o; o += c; } }
+export const HEAVEN_START = START.heaven; // ab hier: himmlische Upgrades (kosten Chips)
+export const SCALE = 40; // jeder Effekt ist die 40. Wurzel des früheren Werts (40× mehr Upgrades)
+
+// Effekte je Upgrade
+export const EFFECT = {
+  tierBig: 2, // erste 10 Stufen je Gebäude
+  tierSmall: Math.pow(1.05, 1 / SCALE),
+  click: Math.pow(1.08, 1 / SCALE),
+  clickPct: 0.001 / SCALE,
+  global: Math.pow(1.02, 1 / SCALE),
+  syn: 0.00004, // pro Upgrade und pro besessenem Gebäude der Gegenseite
+  gFreq: Math.pow(0.99, 1 / SCALE),
+  gDur: Math.pow(1.02, 1 / SCALE),
+  gReward: Math.pow(1.02, 1 / SCALE),
+  gLucky: 0.02 / SCALE,
+  gFrenzy: Math.pow(1.01, 1 / SCALE),
+  hGlobal: Math.pow(1.02, 1 / SCALE),
+  hClick: Math.pow(1.05, 1 / SCALE),
+  hFreq: Math.pow(0.99, 1 / SCALE),
+  hOffline: 600 / SCALE, // Sekunden Offline-Limit
+};
+
+export const KIND = new Uint8Array(TOTAL_UPGRADES);
+export const COST = new Float64Array(TOTAL_UPGRADES);
+export const P1 = new Uint16Array(TOTAL_UPGRADES); // tier: Gebäude · click: 1 = Prozent · syn: A · golden/heaven: Typ
+export const P2 = new Uint16Array(TOTAL_UPGRADES); // syn: B
+export const NEED = new Uint32Array(TOTAL_UPGRADES); // tier/syn: benötigte Anzahl · golden: benötigte goldene Kekse
+export const LEVEL = new Uint32Array(TOTAL_UPGRADES); // laufende Nummer innerhalb der Gruppe (ab 1)
+
+function tierNeed(k) { return k === 1 ? 1 : k === 2 ? 5 : k === 3 ? 10 : k <= 190 ? 10 + (k - 3) * 2 : 384 + Math.floor((k - 190) / 40); }
+(function build() {
+  const NB = BUILDINGS.length;
+  for (let b = 0; b < NB; b++) for (let k = 1; k <= PER_BUILDING; k++) {
+    const id = START.tier + b * PER_BUILDING + (k - 1); const need = tierNeed(k);
+    KIND[id] = K.TIER; P1[id] = b; NEED[id] = need; LEVEL[id] = k;
+    COST[id] = Math.round(BUILDINGS[b].base * 5 * Math.pow(GROWTH, need) * (k > 190 ? 1 + ((k - 190) % 40) * 0.01 : 1));
+  }
+  const rC = Math.pow(10, 23 / COUNTS.click);
+  for (let k = 0; k < COUNTS.click; k++) { const id = START.click + k; KIND[id] = K.CLICK; P1[id] = k % 3 === 2 ? 1 : 0; LEVEL[id] = k + 1; COST[id] = Math.round(100 * Math.pow(rC, k)); }
+  const rG = Math.pow(10, 30 / COUNTS.global);
+  for (let k = 0; k < COUNTS.global; k++) { const id = START.global + k; KIND[id] = K.GLOBAL; LEVEL[id] = k + 1; COST[id] = Math.round(500 * Math.pow(rG, k)); }
+  let idx = 0;
+  for (let l = 1; l <= SYN_LEVELS; l++) for (let a = 0; a < NB; a++) for (let b = 0; b < NB; b++) {
+    if (a === b) continue;
+    const id = START.syn + idx++; KIND[id] = K.SYN; P1[id] = a; P2[id] = b; LEVEL[id] = l; NEED[id] = 10 + l;
+    COST[id] = Math.round(Math.max(BUILDINGS[a].base, BUILDINGS[b].base) * 50 * Math.pow(l, 2.5));
+  }
+  const rK = Math.pow(10, 28 / COUNTS.golden);
+  for (let k = 0; k < COUNTS.golden; k++) { const id = START.golden + k; KIND[id] = K.GOLDEN; P1[id] = k % 5; LEVEL[id] = k + 1; NEED[id] = Math.floor(k / 400); COST[id] = Math.round(7777 * Math.pow(rK, k)); }
+  for (let k = 0; k < COUNTS.heaven; k++) { const id = START.heaven + k; KIND[id] = K.HEAVEN; P1[id] = k % 4; LEVEL[id] = k + 1; COST[id] = Math.max(1, Math.round(Math.pow(1.0075, k / SCALE))); }
+})();
+
+// Reihenfolge nach Preis (Cookie-Upgrades) bzw. ID (himmlisch, bereits nach Preis aufsteigend)
+export const ORDER_COOKIE = Uint32Array.from({ length: HEAVEN_START }, (_, i) => i).sort((x, y) => COST[x] - COST[y] || x - y);
+export const ORDER_HEAVEN = Uint32Array.from({ length: COUNTS.heaven }, (_, i) => HEAVEN_START + i);
 
 const PREFIX = ['Verbessertes', 'Poliertes', 'Geheimes', 'Uraltes', 'Verzaubertes', 'Vergoldetes', 'Mystisches', 'Turbo', 'Mega', 'Ultra', 'Königliches', 'Kosmisches', 'Legendäres', 'Perfektioniertes', 'Handgemachtes', 'Biologisches', 'Quanten', 'Diamant', 'Zuckriges', 'Knuspriges'];
 const KITCHEN = ['Butter', 'Zucker', 'Schokolade', 'Vanille', 'Zimt', 'Mandel', 'Haselnuss', 'Karamell', 'Honig', 'Marzipan', 'Ahornsirup', 'Kakao', 'Kokos', 'Ingwer', 'Pistazie', 'Lavendel', 'Muskat', 'Safran', 'Lebkuchen', 'Mokka'];
 const GOLD = ['Frequenz', 'Dauer', 'Belohnung', 'Glück', 'Rausch'];
-const ROMAN = (n) => {
-  const m = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
-  let s = '';
-  for (const [v, r] of m) while (n >= v) { s += r; n -= v; }
-  return s;
-};
+const HEAVEN = ['Himmlische Macht', 'Göttlicher Klick', 'Engelsglück', 'Ewige Ruhe'];
+const pct = (x, d = 3) => ((x - 1) * 100).toFixed(d).replace('.', ',');
 
-export const SYN_NEED = [10, 25, 50, 100, 150];
-
-// Upgrade-Felder:
-//  kind: tier|click|global|syn|golden|heaven   cost: Cookies (heaven: Chips)
-//  Wirkung je nach kind (siehe applyUpgrade in game.js)
-function build() {
-  const list = [];
-  const push = (u) => { u.id = list.length; list.push(u); };
-
-  // 1) Gebäude-Stufen (190 je Gebäude)
-  const perB = COUNTS.tier / BUILDINGS.length;
-  for (let b = 0; b < BUILDINGS.length; b++) {
-    for (let k = 1; k <= perB; k++) {
-      const need = k === 1 ? 1 : k === 2 ? 5 : k === 3 ? 10 : 10 + (k - 3) * 2;
-      const mult = k <= 10 ? 2 : 1.05;
-      push({
-        kind: 'tier', b, need, mult,
-        cost: Math.round(BUILDINGS[b].base * 5 * Math.pow(GROWTH, need)),
-        name: `${PREFIX[(k + b) % PREFIX.length]} ${BUILDINGS[b].name} ${ROMAN(k)}`,
-        icon: BUILDINGS[b].icon,
-        desc: `${BUILDINGS[b].name}: ×${mult} Produktion (ab ${need} Stück)`,
-      });
+// Vollständiges Upgrade-Objekt (Name, Beschreibung, Icon) – wird nur bei Bedarf erzeugt.
+export function upgrade(id) {
+  const kind = KIND_NAMES[KIND[id]]; const lv = LEVEL[id]; const p1 = P1[id]; const p2 = P2[id];
+  const u = { id, kind, cost: COST[id], level: lv };
+  switch (kind) {
+    case 'tier': {
+      const b = BUILDINGS[p1]; const big = lv <= 10;
+      Object.assign(u, { b: p1, need: NEED[id], name: `${PREFIX[(lv + p1) % 20]} ${b.name} · Stufe ${lv}`, icon: b.icon, desc: `${b.name}: ${big ? '×2' : '+' + pct(EFFECT.tierSmall) + ' %'} Produktion (ab ${NEED[id]} Stück)` });
+      break;
     }
+    case 'click': Object.assign(u, { pct: !!p1, name: `${KITCHEN[(lv - 1) % 20]}-Daumen · Nr. ${lv}`, icon: p1 ? '🖱️' : '👉', desc: p1 ? `Jeder Klick gibt zusätzlich +${(EFFECT.clickPct * 100).toFixed(4).replace('.', ',')} % deiner CpS` : `Klickstärke +${pct(EFFECT.click)} %` }); break;
+    case 'global': Object.assign(u, { name: `${KITCHEN[((lv - 1) * 7) % 20]}-Rezept Nr. ${lv}`, icon: '📜', desc: `Gesamte Produktion +${pct(EFFECT.global, 4)} %` }); break;
+    case 'syn': Object.assign(u, { a: p1, b: p2, need: NEED[id], name: `${BUILDINGS[p1].name} ⇄ ${BUILDINGS[p2].name} · ${lv}`, icon: '🔗', desc: `${BUILDINGS[p1].name} +${(EFFECT.syn * 100).toFixed(3).replace('.', ',')} % pro ${BUILDINGS[p2].name} (ab je ${NEED[id]} Stück)` }); break;
+    case 'golden': Object.assign(u, { type: p1, goldReq: NEED[id], name: `Goldener ${GOLD[p1]} · Nr. ${lv}`, icon: '🌟', desc: ['Goldene Kekse erscheinen etwas schneller', 'Goldene Kekse bleiben etwas länger', 'Goldene Kekse: Belohnungen etwas größer', 'Glückstreffer-Bonus etwas größer', 'Rausch-Stärke etwas größer'][p1] }); break;
+    default: Object.assign(u, { type: p1, name: `${HEAVEN[p1]} · Nr. ${lv}`, icon: ['😇', '✨', '🪽', '🌙'][p1], desc: ['Gesamte Produktion +' + pct(EFFECT.hGlobal, 4) + ' %', 'Klickstärke +' + pct(EFFECT.hClick) + ' %', 'Goldene Kekse etwas häufiger', 'Offline-Limit +15 Sekunden'][p1] });
   }
-
-  // 2) Klick-Upgrades (1.500)
-  const rC = Math.pow(10, 23 / COUNTS.click);
-  for (let k = 0; k < COUNTS.click; k++) {
-    const pct = k % 3 === 2;
-    push({
-      kind: 'click', pct, mult: pct ? 0 : 1.08, add: pct ? 0.001 : 0,
-      cost: Math.round(100 * Math.pow(rC, k)),
-      name: `${KITCHEN[k % KITCHEN.length]}-Daumen ${ROMAN((k % 20) + 1)}·${Math.floor(k / 20) + 1}`,
-      icon: pct ? '🖱️' : '👉',
-      desc: pct ? 'Jeder Klick gibt zusätzlich +0,1 % deiner CpS' : 'Klickstärke ×1,08',
-    });
-  }
-
-  // 3) Globale Produktions-Upgrades (2.500)
-  const rG = Math.pow(10, 30 / COUNTS.global);
-  for (let k = 0; k < COUNTS.global; k++) {
-    push({
-      kind: 'global', mult: 1.02,
-      cost: Math.round(500 * Math.pow(rG, k)),
-      name: `${KITCHEN[(k * 7) % KITCHEN.length]}-Rezept Nr. ${k + 1}`,
-      icon: '📜',
-      desc: 'Gesamte Produktion ×1,02',
-    });
-  }
-
-  // 4) Synergien (15×14 Paare × 5 Stufen = 1.050)
-  for (let l = 1; l <= SYN_NEED.length; l++) {
-    for (let a = 0; a < BUILDINGS.length; a++) {
-      for (let b = 0; b < BUILDINGS.length; b++) {
-        if (a === b) continue;
-        push({
-          kind: 'syn', a, b, level: l, need: SYN_NEED[l - 1],
-          cost: Math.round(Math.max(BUILDINGS[a].base, BUILDINGS[b].base) * 50 * Math.pow(l, 2.5)),
-          name: `${BUILDINGS[a].name} ⇄ ${BUILDINGS[b].name} ${ROMAN(l)}`,
-          icon: '🔗',
-          desc: `${BUILDINGS[a].name} +${(0.05 * l).toFixed(2).replace('.', ',')} % pro ${BUILDINGS[b].name} (ab je ${SYN_NEED[l - 1]} Stück)`,
-        });
-      }
-    }
-  }
-
-  // 5) Goldene Kekse (850)
-  const rK = Math.pow(10, 28 / COUNTS.golden);
-  for (let k = 0; k < COUNTS.golden; k++) {
-    const type = k % 5;
-    const desc = [
-      'Goldene Kekse erscheinen 1 % schneller',
-      'Goldene Kekse bleiben 2 % länger',
-      'Goldene Kekse: Belohnungen +2 %',
-      'Glückstreffer-Bonus +2 % der Bank',
-      'Rausch-Stärke +1 %',
-    ][type];
-    push({
-      kind: 'golden', type,
-      cost: Math.round(7777 * Math.pow(rK, k)),
-      goldReq: Math.floor(k / 10),
-      name: `Goldener ${GOLD[type]} ${ROMAN((Math.floor(k / 5) % 40) + 1)}·${Math.floor(k / 200) + 1}`,
-      icon: '🌟', desc,
-    });
-  }
-
-  // 6) Himmlische Upgrades (1.250) – kosten Himmelschips
-  for (let k = 0; k < COUNTS.heaven; k++) {
-    const type = k % 4;
-    push({
-      kind: 'heaven', type,
-      cost: Math.max(1, Math.round(Math.pow(1.0075, k))),
-      name: `${['Himmlische Macht', 'Göttlicher Klick', 'Engelsglück', 'Ewige Ruhe'][type]} ${ROMAN((Math.floor(k / 4) % 50) + 1)}·${Math.floor(k / 200) + 1}`,
-      icon: ['😇', '✨', '🪽', '🌙'][type],
-      desc: ['Gesamte Produktion ×1,02', 'Klickstärke ×1,05', 'Goldene Kekse 1 % häufiger', 'Offline-Limit +10 Minuten'][type],
-    });
-  }
-  return list;
+  return u;
 }
-
-export const UPGRADES = build();
-
-// Reihenfolge nach Preis (Cookie-Upgrades und Chip-Upgrades getrennt) für schnelle Listen
-export const ORDER_COOKIE = UPGRADES.filter((u) => u.kind !== 'heaven').map((u) => u.id).sort((x, y) => UPGRADES[x].cost - UPGRADES[y].cost || x - y);
-export const ORDER_HEAVEN = UPGRADES.filter((u) => u.kind === 'heaven').map((u) => u.id);
 
 // ---- Erfolge ----
 export function buildAchievements() {
@@ -153,7 +122,7 @@ export function buildAchievements() {
   clicks.forEach((n) => add(`Klickwütig ${fmtShort(n)}`, `${fmtShort(n)}× den großen Keks klicken`, '👆', (s) => s.clicks >= n));
   const golds = [1, 7, 27, 77, 777, 2777];
   golds.forEach((n) => add(`Goldfinger ${n}`, `${n} goldene Kekse anklicken`, '🌟', (s) => s.golden >= n));
-  const ups = [1, 10, 50, 100, 250, 500, 1000, 2500, 5000, 7500, 10000];
+  const ups = [1, 10, 50, 100, 250, 500, 1000, 2500, 5000, 7500, 10000, 25000, 50000, 100000, 200000, 300000, 400000];
   ups.forEach((n) => add(`Tüftler ${n}`, `${n} Upgrades besitzen`, '🧪', (s) => s.upgradeCount >= n));
   const asc = [1, 3, 10, 25];
   asc.forEach((n) => add(`Wiedergeburt ${n}`, `${n}× aufsteigen`, '🪽', (s) => s.ascensions >= n));

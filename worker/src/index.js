@@ -1,5 +1,5 @@
 // Cloudflare Worker: Cloud-Saves, Rangliste, Ereignis-Warteschlange und Admin-API (KV "SAVES").
-const MAX_DATA = 12000;
+const MAX_DATA = 120000; // Spielstand mit 400.000 Upgrades (komprimiert, im Extremfall ~70.000 Zeichen)
 const ID_RE = /^[a-f0-9]{16}$/;
 const SECRET_RE = /^[a-f0-9]{32}$/;
 
@@ -65,7 +65,12 @@ async function pushEvent(env, targetId, ev, from) {
   q.push({ ...ev, eid: rid(), from, t: Date.now() });
   await env.SAVES.put(key, JSON.stringify(q.slice(-50)), { expirationTtl: 60 * 60 * 24 * 14 });
 }
-const popcount = (b64) => { try { let c = 0; for (const ch of atob(b64)) { let v = ch.charCodeAt(0); while (v) { c += v & 1; v >>= 1; } } return c; } catch { return 0; } };
+const popcount = (str) => { // "r:" = Lauflängen (abwechselnd 0er/1er, Varints), "b:" = rohe Bits
+  try {
+    if (str.startsWith('r:')) { const bytes = Uint8Array.from(atob(str.slice(2)), (c) => c.charCodeAt(0)); let cur = 0, c = 0, i = 0; while (i < bytes.length) { let v = 0, sh = 0; while (bytes[i] & 128) { v |= (bytes[i++] & 127) << sh; sh += 7; } v |= bytes[i++] << sh; if (cur) c += v; cur ^= 1; } return c; }
+    let c = 0; for (const ch of atob(str.replace(/^b:/, ''))) { let v = ch.charCodeAt(0); while (v) { c += v & 1; v >>= 1; } } return c;
+  } catch { return 0; }
+};
 
 async function listPlayers(env) {
   const list = await env.SAVES.list({ prefix: 'p:', limit: 1000 });
