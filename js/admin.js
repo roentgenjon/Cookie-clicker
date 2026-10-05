@@ -25,7 +25,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.closest('dialog')?.classList.add('wide');
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
-  let players = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  let players = []; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -79,9 +79,12 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <div class="adm-sec"><h4>🧪 Upgrades (400.000)</h4><div class="adm-btns wrap"><button data-act="up" data-m="all">Alle freischalten</button><button data-act="up" data-m="cookie">Nur Cookie-Upgrades</button><button data-act="up" data-m="heaven">Nur himmlische</button><button class="danger" data-act="up" data-m="none">Alle entfernen</button></div></div>
         <div class="adm-sec"><h4>🏆 Erfolge</h4><div class="adm-btns"><button data-act="ach">Alle Erfolge freischalten</button></div></div>`;
       case 'msg': return `
-        <div class="adm-hint">Zeigt dem Spieler eine Mitteilung ${all ? '(Rundsendung an alle)' : ''} oben im Spiel.</div>
-        ${fld('Nachricht', '<input type="text" id="msg" maxlength="140" placeholder="Text eingeben (max. 140 Zeichen)">')}
-        <button class="adm-go" data-act="msg">💬 Senden</button>`;
+        <div class="adm-hint">${all ? '📣 Die Nachricht wird <b>allen Spielern</b> groß eingeblendet.' : 'Die Nachricht wird dem Spieler groß eingeblendet und bleibt, bis er sie schließt.'}</div>
+        ${fld('Nachricht', '<textarea id="msg" maxlength="140" placeholder="Text eingeben (max. 140 Zeichen)"></textarea>')}
+        <div class="adm-count" id="cnt">0 / 140</div>
+        <div class="adm-quick"><span>Vorlagen:</span><button data-act="tpl" data-t="Willkommen im Keks-Imperium! 🍪">Willkommen</button><button data-act="tpl" data-t="Achtung: Wartungsarbeiten in Kürze, bitte Spielstand speichern!">Wartung</button><button data-act="tpl" data-t="Event! Goldene Kekse regnen gleich – seid bereit! 🌟">Event</button><button data-act="tpl" data-t="Danke fürs Spielen! ❤️">Danke</button></div>
+        <button class="adm-go" data-act="msg">💬 ${all ? 'An ALLE senden' : 'Senden'}</button>
+        ${sent.length ? `<div class="adm-sent"><b>Zuletzt gesendet</b>${sent.map((s) => `<div>${esc(s)}</div>`).join('')}</div>` : ''}`;
       default: {
         if (all) return '<div class="adm-hint">Die Verwaltung (ansehen, sperren, zurücksetzen, löschen) gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         const cur = players.find((p) => p.id === sel);
@@ -94,7 +97,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   }
 
   function paint() {
-    const keep = {}; root.querySelectorAll('input[id],select[id]').forEach((el) => { keep[el.id] = el.value; });
+    const keep = {}; root.querySelectorAll('input[id],select[id],textarea[id]').forEach((el) => { keep[el.id] = el.value; });
     const f = q.trim().toLowerCase();
     const list = players.filter((p) => !f || p.name.toLowerCase().includes(f));
     const cur = players.find((p) => p.id === sel);
@@ -116,6 +119,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         </section>
       </div>`;
     for (const [id, v] of Object.entries(keep)) { const el = root.querySelector('#' + id); if (el && id !== 'q') el.value = v; }
+    const mt = $('#msg'); if (mt) { $('#cnt').textContent = `${mt.value.length} / 140`; mt.addEventListener('input', () => { $('#cnt').textContent = `${mt.value.length} / 140`; }); }
     $('#q').addEventListener('input', (e) => { q = e.target.value; const pos = e.target.selectionStart; paint(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); });
   }
 
@@ -145,11 +149,14 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'building': return send({ type: 'building', b: intIn('#bSel', 0, 14, 0), amount: intIn('#bAmt', 1, 100000, 1) }, `${intIn('#bAmt', 1, 100000, 1)}× ${BUILDINGS[intIn('#bSel', 0, 14, 0)].name}`);
       case 'up': return send({ type: 'upgrades', mode: btn.dataset.m }, { all: 'Alle Upgrades', cookie: 'Cookie-Upgrades', heaven: 'Himmlische Upgrades', none: 'Upgrades entfernen' }[btn.dataset.m]);
       case 'ach': return send({ type: 'achievements' }, 'Alle Erfolge');
+      case 'tpl': { const t = $('#msg'); t.value = btn.dataset.t; $('#cnt').textContent = `${t.value.length} / 140`; t.focus(); return; }
       case 'msg': {
         const text = val('#msg').trim(); if (!text) { say('Bitte eine Nachricht eingeben', false); return paint(); }
         if (!sel) { say('Wähle zuerst in der Liste einen Spieler oder „Alle Spieler“.', false); return paint(); }
-        if (sel === ALL) { try { await call('broadcast', { text }); say('Nachricht an alle Spieler gesendet'); } catch { return; } return paint(); }
-        return send({ type: 'message', text }, 'Nachricht');
+        const log = () => { sent.unshift(`${sel === ALL ? 'ALLE' : nameOf(sel)}: ${text}`); sent.length = Math.min(sent.length, 5); };
+        if (sel === ALL) { try { await call('broadcast', { text }); say('Nachricht an alle Spieler gesendet'); log(); } catch { return; } return paint(); }
+        try { await call('event', { target: sel, event: { type: 'message', text } }); say(`Nachricht an ${nameOf(sel)} gesendet`); toast(`✔ Nachricht → ${nameOf(sel)}`); log(); } catch { return; }
+        return paint();
       }
       case 'inspect': {
         try {

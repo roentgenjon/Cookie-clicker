@@ -272,10 +272,19 @@ function cloudSave(keepalive = false, setup) {
 let banned = false;
 function onBanned() { if (banned) return; banned = true; toast('🚫 Dein Konto wurde gesperrt. Dein Fortschritt wird nicht mehr gespeichert.'); }
 
+// ---------- Eingeblendete Admin-Nachrichten (bleiben, bis man sie schließt) ----------
+function showMessage(from, text) {
+  const box = document.createElement('div'); box.className = 'msgbox';
+  box.innerHTML = `<div class="msg-head">📣 Nachricht von <b>${esc(from || 'Admin')}</b></div><div class="msg-text">${esc(text)}</div><button class="msg-ok">OK</button>`;
+  box.querySelector('.msg-ok').addEventListener('click', () => box.remove());
+  const host = $('#msgs'); host.append(box);
+  while (host.children.length > 4) host.firstChild.remove();
+}
+
 // ---------- Admin-Ereignisse & Rundmeldungen ----------
 function handleEvent(ev, from) {
   const text = game.applyEvent(ev);
-  if (text) toast(`🛡️ <b>${esc(from || 'Admin')}</b>: ${esc(text)}`);
+  if (text) { if (ev.type === 'message') showMessage(from, text); else toast(`🛡️ <b>${esc(from || 'Admin')}</b>: ${esc(text)}`); }
   lastKey = ''; saveLocal();
 }
 async function pollEvents() {
@@ -285,7 +294,7 @@ async function pollEvents() {
     const r = await cloud.events(since);
     ls.set('cc_bc', String(r.now));
     for (const ev of r.events || []) handleEvent(ev, ev.from);
-    for (const bc of r.broadcasts || []) { if (bc.text) toast(`📣 <b>${esc(bc.from)}</b>: ${esc(bc.text)}`); if (bc.event) handleEvent(bc.event, bc.from); }
+    for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
     if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
   } catch (e) { if (e.data && e.data.banned) onBanned(); }
 }
