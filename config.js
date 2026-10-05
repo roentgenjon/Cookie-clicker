@@ -1,2 +1,2 @@
-// URL des Cloudflare Workers (wird nach dem Deploy eingetragen). Leer = nur lokales Speichern.
-export const API_URL = '';
+// URL des Cloudflare Workers (Cloud-Speicher & Rangliste).
+export const API_URL = 'https://cookie-clicker-api.jonathanrontgen7.workers.dev';
