@@ -169,7 +169,7 @@ newsTick(); setInterval(newsTick, 9000);
 const modal = $('#modal');
 let modalKind = null;
 $('#modalClose').addEventListener('click', () => modal.close());
-modal.addEventListener('close', () => { modalKind = null; });
+modal.addEventListener('close', () => { modalKind = null; modal.classList.remove('wide'); });
 modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
 document.querySelectorAll('[data-modal]').forEach((b) => b.addEventListener('click', () => openModal(b.dataset.modal)));
 function openModal(kind) { modalKind = kind; renderModal(); if (!modal.open) modal.showModal(); }
