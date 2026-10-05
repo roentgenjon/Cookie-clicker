@@ -64,7 +64,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <div class="adm-hint">Lässt goldene Kekse (Sterne) auf dem Bildschirm erscheinen. Sie sind ca. 13 Sekunden anklickbar.</div>
         <div class="adm-grid">${fld('Effekt', `<select id="gEff">${opt(EFFECTS, 'random')}</select>`)}${fld('Anzahl', '<input type="number" id="gCnt" min="1" max="30" value="1">', '1–30')}</div>
         <button class="adm-go" data-act="golden">⭐ Sterne spawnen</button>
-        <div class="adm-quick"><span>Schnell:</span><button data-act="gq" data-n="5">5×</button><button data-act="gq" data-n="15">15×</button><button data-act="gq" data-n="30">30×</button></div>`;
+        <div class="adm-quick"><span>Schnell (zufälliger Effekt):</span><button data-act="gq" data-n="5">5× zufällig</button><button data-act="gq" data-n="15">15× zufällig</button><button data-act="gq" data-n="30">30× zufällig</button></div>`;
       case 'boost': return `
         <div class="adm-hint">Zeitlich begrenzter Boost mit freiem Multiplikator.</div>
         <div class="adm-grid3">${fld('Art', '<select id="fKind"><option value="frenzy">🍪 Kekse-Raserei</option><option value="click">👆 Klick-Raserei</option></select>')}${fld('Multiplikator ×', '<input type="number" id="fMult" min="1" max="1000000" step="any" value="7">', '1 bis 1.000.000')}${fld('Dauer (Sekunden)', '<input type="number" id="fSec" min="1" max="3600" value="77">', '1 bis 3600')}</div>
@@ -134,7 +134,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const act = btn.dataset.act; if (!act) return;
     switch (act) {
       case 'golden': return send({ type: 'golden', effect: val('#gEff'), count: intIn('#gCnt', 1, 30, 1) }, `${intIn('#gCnt', 1, 30, 1)}× Sterne`);
-      case 'gq': return send({ type: 'golden', effect: val('#gEff'), count: +btn.dataset.n }, `${btn.dataset.n}× Sterne`);
+      case 'gq': return send({ type: 'golden', effect: 'random', count: +btn.dataset.n }, `${btn.dataset.n}× Sterne (zufällig)`);
       case 'buff': {
         const mult = Number(val('#fMult')), seconds = intIn('#fSec', 1, 3600, 60);
         if (!(mult >= 1 && mult <= 1e6)) { say('Multiplikator muss zwischen 1 und 1.000.000 liegen', false); return paint(); }
