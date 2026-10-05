@@ -111,3 +111,13 @@ dialog.wide{width:min(96vw,1000px)}
 .adm-sent{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute)}.adm-sent div{padding:4px 8px;border-radius:6px;background:var(--bg)}
 .adm-count{font-size:12px;color:var(--mute);text-align:right}
 textarea#msg{min-height:84px;resize:vertical}
+
+.chat{display:flex;flex-direction:column;gap:10px}
+.chat-list{height:min(52vh,420px);overflow:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+.cm{max-width:88%;align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px}
+.cm.me{align-self:flex-end;border-color:var(--accent)}
+.cm-h{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mute)}.cm-h b{color:var(--text)}.cm-h b.adm{color:var(--accent)}
+.cm-del{margin-left:auto;padding:0 6px;font-size:12px;background:none;border:0;cursor:pointer}
+.cm-t{font-size:15px;word-break:break-word;margin-top:2px}
+.chat-form{display:flex;gap:8px}.chat-form input{flex:1;min-width:0}
+.chat-login{padding:8px 4px}

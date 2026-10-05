@@ -72,10 +72,18 @@ const popcount = (str) => { // "r:" = Lauflängen (abwechselnd 0er/1er, Varints)
   } catch { return 0; }
 };
 
+// ---- Chat: letzte 50 Nachrichten in einem KV-Schlüssel "chat" ----
+const CHAT_MAX = 50;
+const cleanChat = (t) => String(t || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+const chatLoad = async (env) => (await env.SAVES.get('chat', 'json')) || [];
+const chatSave = (env, list) => env.SAVES.put('chat', JSON.stringify(list.slice(-CHAT_MAX)));
+const chatPublic = (list) => list.map(({ i, t, n, a, x }) => ({ i, t, n, a, x }));
+
 async function listPlayers(env) {
   const list = await env.SAVES.list({ prefix: 'p:', limit: 1000 });
   const bans = new Set((await env.SAVES.list({ prefix: 'ban:', limit: 1000 })).keys.map((k) => k.name.slice(4)));
-  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)) }));
+  const mutes = new Set((await env.SAVES.list({ prefix: 'mute:', limit: 1000 })).keys.map((k) => k.name.slice(5)));
+  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
 }
 
 async function admin(env, b) {
@@ -117,6 +125,19 @@ async function admin(env, b) {
       await env.SAVES.put('bc', JSON.stringify(bc.slice(-10)));
       return json(env, { ok: true });
     }
+    case 'chatDel': {
+      const list = await chatLoad(env);
+      await chatSave(env, list.filter((m) => m.i !== Number(b.mid)));
+      return json(env, { ok: true });
+    }
+    case 'chatClear': { await env.SAVES.put('chat', '[]'); return json(env, { ok: true }); }
+    case 'mute': {
+      if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
+      if (admins[target]) return fail(env, 'Admins können nicht stumm geschaltet werden', 403);
+      const min = Math.floor(Number(b.minutes));
+      if (min > 0) await env.SAVES.put('mute:' + target, '1', { expirationTtl: Math.max(60, Math.min(min, 60 * 24 * 30) * 60) }); else await env.SAVES.delete('mute:' + target);
+      return json(env, { ok: true });
+    }
     case 'ban': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gesperrt werden', 403);
@@ -126,7 +147,7 @@ async function admin(env, b) {
     case 'delete': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gelöscht werden', 403);
-      await Promise.all(['p:', 'q:', 'ban:', 'f:'].map((p) => env.SAVES.delete(p + target)));
+      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:'].map((p) => env.SAVES.delete(p + target)));
       return json(env, { ok: true });
     }
     default: return fail(env, 'Unbekannte Aktion');
@@ -182,6 +203,28 @@ export default {
         const since = Number(b.since) || 0;
         const bc = ((await env.SAVES.get('bc', 'json')) || []).filter((x) => x.t > since);
         return json(env, { events: q, broadcasts: bc, now: Date.now() });
+      }
+
+      // Chat lesen (ohne Anmeldung möglich)
+      if (url.pathname === '/api/chat' && req.method === 'GET') return json(env, { messages: chatPublic(await chatLoad(env)), now: Date.now() });
+
+      // Chat schreiben (nur angemeldet, nicht gesperrt/stumm)
+      if (url.pathname === '/api/chat/send' && req.method === 'POST') {
+        const b = await req.json();
+        const au = await authenticate(env, b);
+        if (au.err) return au.err;
+        const text = cleanChat(b.text);
+        if (!text) return fail(env, 'Leere Nachricht');
+        if (await env.SAVES.get('mute:' + b.id)) return fail(env, 'Du bist stumm geschaltet.', 403, { muted: true });
+        const meta = (await env.SAVES.getWithMetadata('p:' + b.id, 'text')).metadata || {};
+        const admins = await adminMap(env);
+        const list = await chatLoad(env); const now = Date.now();
+        const mine = [...list].reverse().find((m) => m.u === b.id);
+        if (mine && now - mine.t < 2000) return fail(env, 'Nicht so schnell!', 429);
+        if (mine && mine.x === text && now - mine.t < 60000) return fail(env, 'Diese Nachricht hast du gerade schon gesendet.', 429);
+        list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, n: meta.n || 'Anonym', u: b.id, a: !!admins[b.id], x: text });
+        await chatSave(env, list);
+        return json(env, { ok: true });
       }
 
       if (url.pathname === '/api/admin' && req.method === 'POST') return admin(env, await req.json());

@@ -2,6 +2,7 @@ import { BUILDINGS, upgrade, TOTAL_UPGRADES, KIND, K, fmtShort } from './data.js
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
+import { createChat } from './chat.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -169,9 +170,12 @@ newsTick(); setInterval(newsTick, 9000);
 const modal = $('#modal');
 let modalKind = null;
 $('#modalClose').addEventListener('click', () => modal.close());
-modal.addEventListener('close', () => { modalKind = null; modal.classList.remove('wide'); });
+modal.addEventListener('close', () => { if (modalKind === 'chat') chat.close(); modalKind = null; modal.classList.remove('wide'); });
 modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
 document.querySelectorAll('[data-modal]').forEach((b) => b.addEventListener('click', () => openModal(b.dataset.modal)));
+let isAdmin = false;
+const chat = createChat({ toast, isAdmin: () => isAdmin, onUnread: (n) => { $('#chatBadge').textContent = n ? (n > 9 ? '9+' : n) : ''; } });
+chat.start();
 function openModal(kind) { modalKind = kind; renderModal(); if (!modal.open) modal.showModal(); }
 function renderModal() {
   const body = $('#modalBody'); const t = $('#modalTitle');
@@ -206,6 +210,7 @@ function renderModal() {
     $('#doAscend')?.addEventListener('click', () => { if (confirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
+  else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
   else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
 }
 
@@ -306,9 +311,9 @@ function startEvents() {
 }
 async function checkAdmin() {
   const btn = $('#adminBtn');
-  btn.classList.add('hidden');
+  btn.classList.add('hidden'); isAdmin = false;
   if (!cloud.loggedIn) return;
-  try { const r = await cloud.admin('whoami'); if (r.admin) btn.classList.remove('hidden'); } catch { /* kein Admin */ }
+  try { const r = await cloud.admin('whoami'); if (r.admin) { btn.classList.remove('hidden'); isAdmin = true; } } catch { /* kein Admin */ }
 }
 $('#adminBtn').addEventListener('click', () => openModal('admin'));
 function updateCloudBtn() { $('#cloudBtn').textContent = cloud.loggedIn ? `☁️ ${cloud.name}` : '☁️ Anmelden'; }

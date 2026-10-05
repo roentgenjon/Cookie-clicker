@@ -84,12 +84,14 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <div class="adm-count" id="cnt">0 / 140</div>
         <div class="adm-quick"><span>Vorlagen:</span><button data-act="tpl" data-t="Willkommen im Keks-Imperium! 🍪">Willkommen</button><button data-act="tpl" data-t="Achtung: Wartungsarbeiten in Kürze, bitte Spielstand speichern!">Wartung</button><button data-act="tpl" data-t="Event! Goldene Kekse regnen gleich – seid bereit! 🌟">Event</button><button data-act="tpl" data-t="Danke fürs Spielen! ❤️">Danke</button></div>
         <button class="adm-go" data-act="msg">💬 ${all ? 'An ALLE senden' : 'Senden'}</button>
+        <div class="adm-sec"><h4>💬 Chat</h4><button class="danger" data-act="chatClear">🧹 Gesamten Chat leeren</button></div>
         ${sent.length ? `<div class="adm-sent"><b>Zuletzt gesendet</b>${sent.map((s) => `<div>${esc(s)}</div>`).join('')}</div>` : ''}`;
       default: {
         if (all) return '<div class="adm-hint">Die Verwaltung (ansehen, sperren, zurücksetzen, löschen) gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         const cur = players.find((p) => p.id === sel);
         return `
         <div class="adm-sec"><h4>🔎 Spielstand</h4><button data-act="inspect">📋 Spielstand ansehen</button>${info ? `<pre>${esc(info)}</pre>` : ''}</div>
+        <div class="adm-sec"><h4>🔇 Chat</h4><div class="adm-btns wrap"><button data-act="mute" data-min="10">10 Min stumm</button><button data-act="mute" data-min="60">1 Std stumm</button><button data-act="mute" data-min="1440">24 Std stumm</button><button data-act="mute" data-min="0">${cur && cur.muted ? '🔊 Stumm aufheben' : 'Stumm aufheben'}</button></div><small class="adm-small">Stumme Spieler können im Chat nicht schreiben. Einzelne Nachrichten löschst du direkt im Chat mit 🗑️.</small></div>
         <div class="adm-sec"><h4>🚫 Zugang</h4><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button><small class="adm-small">Gesperrte Spieler können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
         <div class="adm-sec danger-zone"><h4>⚠️ Gefahrenzone</h4><div class="adm-btns wrap"><button class="danger" data-act="reset">♻️ Spielstand zurücksetzen</button><button class="danger" data-act="del">🗑️ Konto löschen</button></div></div>`;
       }
@@ -108,7 +110,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
           <div class="adm-search"><input type="text" id="q" placeholder="🔍 Spieler suchen…" value="${esc(q)}"><button id="reload" title="Liste aktualisieren">🔄</button></div>
           <div class="adm-list">
             <div class="adm-row all ${sel === ALL ? 'sel' : ''}" data-id="${ALL}"><span class="dot on"></span><span>📣 Alle Spieler</span><span></span></div>
-            ${list.map((p) => `<div class="adm-row ${p.id === sel ? 'sel' : ''}" data-id="${p.id}"><span class="dot ${online(p) ? 'on' : ''}"></span><span>${esc(p.name)}${p.banned ? ' 🚫' : ''}</span><span class="sc">${fmt(p.score)}</span></div>`).join('') || '<div class="adm-empty">Keine Treffer</div>'}
+            ${list.map((p) => `<div class="adm-row ${p.id === sel ? 'sel' : ''}" data-id="${p.id}"><span class="dot ${online(p) ? 'on' : ''}"></span><span>${esc(p.name)}${p.banned ? ' 🚫' : ''}${p.muted ? ' 🔇' : ''}</span><span class="sc">${fmt(p.score)}</span></div>`).join('') || '<div class="adm-empty">Keine Treffer</div>'}
           </div>
         </aside>
         <section class="adm-main">
@@ -163,6 +165,16 @@ export async function renderAdmin(body, { fmt, toast, title }) {
           const d = await call('inspect', { target: sel });
           info = `Name: ${d.name}\nKekse: ${fmt(d.cookies || 0)} · gebacken (Runde): ${fmt(d.total || 0)} · früher: ${fmt(d.totalReset || 0)}\nKlicks: ${fmt(d.clicks || 0)} · goldene Kekse: ${d.golden || 0}\nGebäude: ${(d.owned || []).map((n, i) => n ? `${BUILDINGS[i].name} ${n}` : '').filter(Boolean).join(', ') || '–'}\nUpgrades: ${d.upgrades}/400000 · Erfolge: ${d.achievements}\nAufstiege: ${d.ascensions || 0} · Chips: ${d.chipsEarned || 0} (ausgegeben ${d.chipsSpent || 0})\nLetzte Speicherung: ${new Date(d.lastSave).toLocaleString('de-DE')}${d.banned ? '\n🚫 GESPERRT' : ''}`;
         } catch { return; }
+        return paint();
+      }
+      case 'mute': {
+        const min = +btn.dataset.min;
+        try { await call('mute', { target: sel, minutes: min }); say(min ? `${nameOf(sel)} ist ${min >= 60 ? min / 60 + ' Std' : min + ' Min'} stumm` : `${nameOf(sel)} darf wieder schreiben`); await refresh(); } catch { return; }
+        return paint();
+      }
+      case 'chatClear': {
+        if (!confirm('Den gesamten Chat wirklich leeren?')) return;
+        try { await call('chatClear', {}); say('Chat geleert'); } catch { return; }
         return paint();
       }
       case 'ban': {
