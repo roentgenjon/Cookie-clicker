@@ -31,7 +31,20 @@ assert.ok(g4.ascend() && g4.chipsEarned === 2 && g4.cookies === 0);
 const g5 = new Game(); g5.owned[0] = 1; g5.total = 5; g5.clicks = 1;
 assert.ok(g5.checkAchievements().length >= 2);
 // Goldener Keks
-const g6 = new Game(); g6.nextGolden = 0; g6.tick(1); assert.ok(g6.gc); assert.ok(g6.clickGolden());
+const g6 = new Game(); g6.nextGolden = 0; g6.tick(1); assert.equal(g6.gcs.length, 1); assert.ok(g6.clickGolden(g6.gcs[0].id)); assert.equal(g6.gcs.length, 0);
+// Admin-Ereignisse
+const g9 = new Game(); g9.owned[1] = 5; g9.recalc();
+g9.applyEvent({ type: 'golden', effect: 'lucky', count: 3 }); assert.ok(g9.gcs.length === 3 && g9.gcs[0].effect === 'lucky');
+g9.applyEvent({ type: 'cookies', amount: 1000 }); assert.equal(g9.cookies, 1000);
+g9.applyEvent({ type: 'cookies', amount: -5000 }); assert.equal(g9.cookies, 0);
+g9.applyEvent({ type: 'chips', amount: 4 }); assert.equal(g9.chipsEarned, 4);
+g9.applyEvent({ type: 'building', b: 2, amount: 7 }); assert.equal(g9.owned[2], 7);
+g9.applyEvent({ type: 'buff', kind: 'frenzy', mult: 10, seconds: 60 }); assert.equal(g9.buffMult('frenzy'), 10);
+g9.applyEvent({ type: 'buff', kind: 'click', mult: 50, seconds: 60 }); assert.equal(g9.buffMult('click'), 50);
+g9.applyEvent({ type: 'upgrades', mode: 'all' }); assert.equal(g9.upgradeCount, 10000);
+g9.applyEvent({ type: 'upgrades', mode: 'none' }); assert.equal(g9.upgradeCount, 0);
+g9.applyEvent({ type: 'achievements' }); assert.equal(g9.achCount(), ACH.length);
+g9.name = 'X'; g9.applyEvent({ type: 'reset' }); assert.equal(g9.cookies, 0); assert.equal(g9.name, 'X'); assert.equal(g9.owned[1], 0);
 const g7 = new Game(); g7.owned[1] = 10; g7.recalc();
 const r = g7.catchUp(3600); assert.ok(Math.abs(r.gain - g7.baseCps * 3600) < 1e-6);
 assert.equal(g7.catchUp(1e9).offlineSecs, 24 * 3600);

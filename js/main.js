@@ -1,6 +1,7 @@
 import { BUILDINGS, UPGRADES, TOTAL_UPGRADES, fmtShort } from './data.js';
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
+import { renderAdmin } from './admin.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -66,11 +67,21 @@ document.addEventListener('keyup', (e) => { if (isSpace(e)) { stopHold(); if (!t
 addEventListener('blur', stopHold);
 
 // ---------- Goldener Keks ----------
-const gcEl = $('#golden');
-gcEl.addEventListener('click', () => {
-  const m = game.clickGolden(); if (!m) return;
+const goldenLayer = $('#goldens');
+const goldenEls = new Map();
+goldenLayer.addEventListener('click', (e) => {
+  const el = e.target.closest('.golden'); if (!el) return;
+  const m = game.clickGolden(+el.dataset.id); if (!m) return;
   toast(`🌟 <b>${esc(m.text)}</b>${m.gain ? ` +${fmt(m.gain)} Kekse` : ''}`);
 });
+function renderGoldens() {
+  const alive = new Set(game.gcs.map((g) => g.id));
+  for (const [id, el] of goldenEls) if (!alive.has(id)) { el.remove(); goldenEls.delete(id); }
+  for (const g of game.gcs) {
+    let el = goldenEls.get(g.id);
+    if (!el) { el = document.createElement('button'); el.className = 'golden'; el.dataset.id = g.id; el.textContent = '🌟'; el.setAttribute('aria-label', 'Goldener Keks'); el.style.left = g.x + '%'; el.style.top = g.y + '%'; goldenLayer.append(el); goldenEls.set(g.id, el); }
+  }
+}
 
 // ---------- Shop ----------
 const shop = $('#shop');
@@ -189,6 +200,7 @@ function renderModal() {
     $('#doAscend')?.addEventListener('click', () => { if (confirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
+  else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
 }
 
 function renderSettings() {
@@ -217,6 +229,7 @@ async function renderCloud() {
       <p>Gib deinen <b>Namen</b> und ein <b>Passwort</b> ein. Neuer Name = neues Konto, bekannter Name = dein Fortschritt wird aus der Datenbank geladen.</p>
       <label>Name<input type="text" id="lName" maxlength="16" autocomplete="username" value="${esc(game.name === 'Dein' ? '' : game.name)}"></label>
       <label>Passwort<input type="password" id="lPass" autocomplete="current-password"></label>
+      <details id="lSetupBox"><summary class="note">Admin-Erstanmeldung (nur beim allerersten Mal für reservierte Admin-Namen)</summary><label>Setup-Code<input type="password" id="lSetup" autocomplete="off"></label></details>
       <div class="rowf"><button type="submit" id="lGo">🔑 Anmelden / Registrieren</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></form>`;
     $('#lGuest').addEventListener('click', () => { ls.set('cc_guest', '1'); modal.close(); });
@@ -224,9 +237,9 @@ async function renderCloud() {
       e.preventDefault(); $('#lGo').disabled = true; msg('Anmelden…');
       try {
         const r = await cloud.login($('#lName').value, $('#lPass').value);
-        if (r.isNew) { game.name = cloud.name; await cloudSave(); toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
+        if (r.isNew) { game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
         else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
-        $('#bakeryName').textContent = game.name; updateCloudBtn(); modal.close();
+        $('#bakeryName').textContent = game.name; updateCloudBtn(); checkAdmin(); startEvents(); modal.close();
       } catch (err) { msg('❌ ' + err.message); $('#lGo').disabled = false; }
     });
   } else {
@@ -235,7 +248,7 @@ async function renderCloud() {
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></div>`;
     $('#cSave').addEventListener('click', async () => { try { await cloudSave(); msg('Gespeichert ✔'); loadLb(); } catch (e) { msg('❌ ' + e.message); } });
     $('#cLoad').addEventListener('click', async () => { try { const r = await cloud.load(); game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); msg('Geladen ✔'); } catch (e) { msg('❌ ' + e.message); } });
-    $('#cOut').addEventListener('click', async () => { try { await cloudSave(); } catch { /* egal */ } cloud.logout(); updateCloudBtn(); renderCloud(); });
+    $('#cOut').addEventListener('click', async () => { try { await cloudSave(); } catch { /* egal */ } cloud.logout(); updateCloudBtn(); checkAdmin(); renderCloud(); });
   }
   loadLb();
 }
@@ -246,7 +259,43 @@ async function loadLb() {
     box.innerHTML = r.players.length ? `<table class="lb"><tr><th>#</th><th>Bäckerei</th><th>Gebacken gesamt</th></tr>${r.players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${fmt(p.score)}</td></tr>`).join('')}</table>` : 'Noch keine Einträge.';
   } catch (e) { box.textContent = '❌ ' + e.message; }
 }
-function cloudSave(keepalive = false) { return cloud.save(game.serialize(), game.totalReset + game.total, keepalive); }
+function cloudSave(keepalive = false, setup) {
+  if (banned) return Promise.resolve();
+  return cloud.save(game.serialize(), game.totalReset + game.total, keepalive, setup).catch((e) => { if (e.data && e.data.banned) onBanned(); throw e; });
+}
+let banned = false;
+function onBanned() { if (banned) return; banned = true; toast('🚫 Dein Konto wurde gesperrt. Dein Fortschritt wird nicht mehr gespeichert.'); }
+
+// ---------- Admin-Ereignisse & Rundmeldungen ----------
+function handleEvent(ev, from) {
+  const text = game.applyEvent(ev);
+  if (text) toast(`🛡️ <b>${esc(from || 'Admin')}</b>: ${esc(text)}`);
+  lastKey = ''; saveLocal();
+}
+async function pollEvents() {
+  if (!cloud.loggedIn || banned) return;
+  try {
+    const since = Number(ls.get('cc_bc')) || 0;
+    const r = await cloud.events(since);
+    ls.set('cc_bc', String(r.now));
+    for (const ev of r.events || []) handleEvent(ev, ev.from);
+    for (const bc of r.broadcasts || []) { if (bc.text) toast(`📣 <b>${esc(bc.from)}</b>: ${esc(bc.text)}`); if (bc.event) handleEvent(bc.event, bc.from); }
+    if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
+  } catch (e) { if (e.data && e.data.banned) onBanned(); }
+}
+let evTimer = null;
+function startEvents() {
+  if (!ls.get('cc_bc')) ls.set('cc_bc', String(Date.now()));
+  if (!evTimer) evTimer = setInterval(pollEvents, 10000);
+  pollEvents();
+}
+async function checkAdmin() {
+  const btn = $('#adminBtn');
+  btn.classList.add('hidden');
+  if (!cloud.loggedIn) return;
+  try { const r = await cloud.admin('whoami'); if (r.admin) btn.classList.remove('hidden'); } catch { /* kein Admin */ }
+}
+$('#adminBtn').addEventListener('click', () => openModal('admin'));
 function updateCloudBtn() { $('#cloudBtn').textContent = cloud.loggedIn ? `☁️ ${cloud.name}` : '☁️ Anmelden'; }
 updateCloudBtn();
 
@@ -254,6 +303,7 @@ updateCloudBtn();
 (async () => {
   if (!cloud.enabled) return;
   if (!cloud.loggedIn) { if (ls.get('cc_guest') !== '1') openModal('cloud'); return; }
+  startEvents(); checkAdmin();
   try {
     const r = await cloud.load();
     if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (o.gain > 0) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
@@ -272,11 +322,11 @@ function frame(now) {
   $('#cps').textContent = fmt(game.cps);
   $('#clickVal').textContent = fmt(game.clickValue);
   document.title = `${fmt(game.cookies)} Kekse – Keks-Imperium`;
-  if (game.gc) { gcEl.classList.remove('hidden'); gcEl.style.left = game.gc.x + '%'; gcEl.style.top = game.gc.y + '%'; } else gcEl.classList.add('hidden');
+  renderGoldens();
   slowT += dt;
   if (slowT >= 0.25) {
     slowT = 0; renderShop(); renderUpgrades();
-    const buffs = game.buffs.map((b) => `<span>${b.type === 'frenzy' ? '🔥 ×' + Math.round(b.mult * 10) / 10 : '👆 ×777'} ${Math.max(0, Math.ceil((b.until - Date.now()) / 1000))}s</span>`).join('');
+    const buffs = game.buffs.map((b) => `<span>${b.type === 'frenzy' ? '🔥' : '👆'} ×${Math.round(b.mult * 10) / 10} ${Math.max(0, Math.ceil((b.until - Date.now()) / 1000))}s</span>`).join('');
     $('#buffs').innerHTML = buffs;
   }
   saveT += dt; cloudT += dt;

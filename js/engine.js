@@ -21,7 +21,7 @@ export class Game {
     this.ach = new Uint8Array(ACH.length);
     this.ascensions = 0; this.chipsEarned = 0; this.chipsSpent = 0;
     this.start = Date.now(); this.last = Date.now();
-    this.buffs = []; this.gc = null; this.nextGolden = 60;
+    this.buffs = []; this.gcs = []; this.gid = 0; this.nextGolden = 60;
     this.recalc();
   }
 
@@ -146,27 +146,36 @@ export class Game {
     const now = Date.now();
     this.buffs = this.buffs.filter((b) => b.until > now);
     this.earn(this.cps * dt);
-    if (this.gc) { if (this.gc.until < now) this.gc = null; } else {
-      this.nextGolden -= dt;
-      if (this.nextGolden <= 0) {
-        this.gc = { until: now + 13000 * this.gDur, x: 8 + Math.random() * 80, y: 10 + Math.random() * 70 };
-        this.nextGolden = (60 + Math.random() * 120) * this.gFreq;
-      }
+    this.gcs = this.gcs.filter((g) => g.until > now);
+    this.nextGolden -= dt;
+    if (this.nextGolden <= 0) {
+      this.nextGolden = (60 + Math.random() * 120) * this.gFreq;
+      if (this.gcs.length < 40) this.spawnGolden();
     }
   }
 
-  clickGolden() {
-    if (!this.gc) return null;
-    this.gc = null; this.golden++;
-    const r = Math.random(); const rw = this.gReward; const now = Date.now(); let msg;
-    if (r < 0.5) {
+  // effect: null = zufällig, sonst 'frenzy'|'lucky'|'click'|'jackpot'
+  spawnGolden(effect = null) {
+    const g = { id: ++this.gid, until: Date.now() + 13000 * this.gDur, x: 6 + Math.random() * 84, y: 8 + Math.random() * 74, effect };
+    this.gcs.push(g);
+    return g;
+  }
+
+  clickGolden(id) {
+    const i = this.gcs.findIndex((g) => g.id === id);
+    if (i < 0) return null;
+    const [gc] = this.gcs.splice(i, 1); this.golden++;
+    let effect = gc.effect;
+    if (!effect) { const r = Math.random(); effect = r < 0.5 ? 'frenzy' : r < 0.8 ? 'lucky' : r < 0.95 ? 'click' : 'jackpot'; }
+    const rw = this.gReward; const now = Date.now(); let msg;
+    if (effect === 'frenzy') {
       const mult = this.gFrenzy; const s = 77 * this.gDur;
       this.buffs.push({ type: 'frenzy', mult, until: now + s * 1000 });
       msg = { kind: 'frenzy', text: `Raserei! Produktion ×${Math.round(mult * 10) / 10} für ${Math.round(s)} s` };
-    } else if (r < 0.8) {
+    } else if (effect === 'lucky') {
       const g = Math.min(this.cookies * this.gLucky, this.baseCps * 900) * rw + 13;
       this.earn(g); msg = { kind: 'lucky', text: 'Glückstreffer!', gain: g };
-    } else if (r < 0.95) {
+    } else if (effect === 'click') {
       const s = 13 * this.gDur;
       this.buffs.push({ type: 'click', mult: 777, until: now + s * 1000 });
       msg = { kind: 'click', text: `Klick-Raserei! Klicks ×777 für ${Math.round(s)} s` };
@@ -174,6 +183,27 @@ export class Game {
       const g = this.baseCps * 600 * rw + 13; this.earn(g); msg = { kind: 'jackpot', text: 'Jackpot!', gain: g };
     }
     return msg;
+  }
+
+  // Ereignis vom Admin anwenden; gibt einen Anzeigetext zurück
+  applyEvent(ev) {
+    switch (ev.type) {
+      case 'golden': for (let i = 0; i < ev.count; i++) this.spawnGolden(ev.effect === 'random' ? null : ev.effect); return `${ev.count}× goldener Keks erscheint!`;
+      case 'cookies': this.cookies = Math.max(0, this.cookies + ev.amount); return ev.amount >= 0 ? 'Du bekommst Kekse geschenkt!' : 'Dir wurden Kekse abgezogen.';
+      case 'chips': this.chipsEarned += ev.amount; this.updateCps(); return `+${ev.amount} Himmelschips!`;
+      case 'building': this.owned[ev.b] += ev.amount; this.updateCps(); return `+${ev.amount}× ${BUILDINGS[ev.b].name}!`;
+      case 'buff': this.buffs.push({ type: ev.kind, mult: ev.mult, until: Date.now() + ev.seconds * 1000 }); return `${ev.kind === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${ev.mult} für ${ev.seconds} s!`;
+      case 'achievements': this.ach.fill(1); this.updateCps(); return 'Alle Erfolge freigeschaltet!';
+      case 'upgrades':
+        for (let i = 0; i < TOTAL_UPGRADES; i++) {
+          if (ev.mode === 'none') this.bought[i] = 0;
+          else if (ev.mode === 'all' || (ev.mode === 'cookie' && i < HEAVEN_START) || (ev.mode === 'heaven' && i >= HEAVEN_START)) this.bought[i] = 1;
+        }
+        this.recalc(); return ev.mode === 'none' ? 'Alle Upgrades wurden entfernt.' : 'Upgrades freigeschaltet!';
+      case 'message': return ev.text;
+      case 'reset': { const n = this.name; this.hardReset(); this.name = n; return 'Dein Spielstand wurde zurückgesetzt.'; }
+      default: return null;
+    }
   }
 
   // ---- Aufstieg ----
@@ -186,7 +216,7 @@ export class Game {
     this.cookies = 0; this.total = 0;
     this.owned.fill(0);
     for (let i = 0; i < HEAVEN_START; i++) this.bought[i] = 0;
-    this.buffs = []; this.gc = null; this.nextGolden = 60;
+    this.buffs = []; this.gcs = []; this.nextGolden = 60;
     this.recalc();
     return true;
   }
