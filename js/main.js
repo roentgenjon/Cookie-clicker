@@ -1,4 +1,4 @@
-import { BUILDINGS, UPGRADES, TOTAL_UPGRADES, fmtShort } from './data.js';
+import { BUILDINGS, upgrade, TOTAL_UPGRADES, KIND, K, fmtShort } from './data.js';
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
@@ -13,6 +13,7 @@ const game = new Game();
 let amount = 1;
 let filter = 'all';
 let shown = 80;
+const MAX_SHOWN = 2560;
 let localLast = 0;
 let particles = ls.get('cc_particles') !== '0';
 
@@ -110,23 +111,28 @@ function renderShop() {
 const FILTERS = [['all', 'Alle'], ['tier', 'Gebäude'], ['click', 'Klick'], ['global', 'Global'], ['syn', 'Synergie'], ['golden', 'Gold'], ['heaven', 'Himmlisch']];
 $('#filters').innerHTML = FILTERS.map(([k, t]) => `<button data-f="${k}" class="${k === filter ? 'on' : ''}">${t}</button>`).join('');
 $('#filters').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; filter = b.dataset.f; shown = 80; [...$('#filters').children].forEach((c) => c.classList.toggle('on', c === b)); lastKey = ''; });
-$('#moreUp').addEventListener('click', () => { shown += 120; lastKey = ''; });
-$('#buyAll').addEventListener('click', () => { const n = (filter === 'heaven' ? 0 : game.buyAllAffordable(false)) + (filter === 'heaven' || filter === 'all' ? game.buyAllAffordable(true) : 0);
-  toast(n ? `${n} Upgrades gekauft` : 'Nichts bezahlbar'); lastKey = ''; });
+$('#moreUp').addEventListener('click', () => { shown = Math.min(shown * 2, MAX_SHOWN); lastKey = ''; });
+$('#buyAll').addEventListener('click', () => {
+  const kind = K[filter.toUpperCase()];
+  const n = filter === 'heaven' ? game.buyAllAffordable(true) : filter === 'all' ? game.buyAllAffordable(false) + game.buyAllAffordable(true) : game.buyAllAffordable(false, kind);
+  toast(n ? `${n.toLocaleString('de-DE')} Upgrades gekauft` : 'Nichts bezahlbar'); lastKey = '';
+});
 $('#upgrades').addEventListener('click', (e) => { const b = e.target.closest('.up'); if (b && game.buyUpgrade(+b.dataset.id)) { lastKey = ''; hideTip(); } });
 let lastKey = '';
 function renderUpgrades() {
-  let ids;
-  if (filter === 'heaven') ids = game.visibleUpgrades(true);
-  else { ids = game.visibleUpgrades(false); if (filter !== 'all') ids = ids.filter((id) => UPGRADES[id].kind === filter); }
-  if (filter === 'all') ids = ids.concat(game.visibleUpgrades(true));
-  const total = ids.length; const part = ids.slice(0, shown);
-  const key = part.map((id) => id + (game.canAfford(id) ? '+' : '-')).join() + '|' + total;
+  let ids, total;
+  if (filter === 'heaven') ({ ids, total } = game.visibleList(true, null, shown));
+  else if (filter === 'all') {
+    const a = game.visibleList(false, null, shown); const h = game.visibleList(true, null, Math.max(0, shown - a.ids.length));
+    ids = a.ids.concat(h.ids); total = a.total + h.total;
+  } else ({ ids, total } = game.visibleList(false, K[filter.toUpperCase()], shown));
+  const key = ids.map((id) => id + (game.canAfford(id) ? '+' : '-')).join() + '|' + total;
   $('#upCount').textContent = `${game.upgradeCount.toLocaleString('de-DE')} / ${TOTAL_UPGRADES.toLocaleString('de-DE')} gekauft · ${total.toLocaleString('de-DE')} verfügbar`;
   if (key === lastKey) return; lastKey = key;
-  $('#upgrades').innerHTML = part.map((id) => { const u = UPGRADES[id]; return `<button class="up ${u.kind === 'heaven' ? 'heaven ' : ''}${game.canAfford(id) ? 'ok' : 'no'}" data-id="${id}">${u.icon}</button>`; }).join('');
-  $('#moreUp').classList.toggle('hidden', total <= shown);
-  $('#moreUp').textContent = `Mehr anzeigen (${total - shown} weitere)`;
+  $('#upgrades').innerHTML = ids.map((id) => { const u = upgrade(id); return `<button class="up ${u.kind === 'heaven' ? 'heaven ' : ''}${game.canAfford(id) ? 'ok' : 'no'}" data-id="${id}">${u.icon}</button>`; }).join('');
+  const more = total - ids.length;
+  $('#moreUp').classList.toggle('hidden', more <= 0 || shown >= MAX_SHOWN);
+  $('#moreUp').textContent = `Mehr anzeigen (${more.toLocaleString('de-DE')} weitere)`;
   $('#upEmpty').classList.toggle('hidden', total > 0);
 }
 
@@ -137,7 +143,7 @@ function moveTip(e) { const w = tip.offsetWidth, h = tip.offsetHeight; let x = e
 function hideTip() { tip.classList.add('hidden'); }
 document.addEventListener('mouseover', (e) => {
   const up = e.target.closest('.up'); const row = e.target.closest('#shop .row');
-  if (up) { const u = UPGRADES[+up.dataset.id]; showTip(`<b>${esc(u.name)}</b><br>${esc(u.desc)}<br><span class="mu">${u.kind === 'heaven' ? '😇 ' + fmt(u.cost) + ' Chips' : '🍪 ' + fmt(u.cost)}</span>`, e); }
+  if (up) { const u = upgrade(+up.dataset.id); showTip(`<b>${esc(u.name)}</b><br>${esc(u.desc)}<br><span class="mu">${u.kind === 'heaven' ? '😇 ' + fmt(u.cost) + ' Chips' : '🍪 ' + fmt(u.cost)}</span>`, e); }
   else if (row) {
     const i = +row.dataset.i, b = BUILDINGS[i], per = b.cps * game.tierMult[i] * game.globalMult * (1 + 0.01 * game.chipsEarned);
     showTip(`<b>${b.name}</b> (${game.owned[i]})<br>Jedes erzeugt ca. ${fmt(per)} Kekse/s<br>Gesamt: ${fmt(per * game.owned[i])}/s<br><span class="mu">Rechtsklick: verkaufen (50 %)</span>`, e);
@@ -181,7 +187,7 @@ function renderModal() {
       <span>Klicks</span><span>${fmt(game.clicks)}</span>
       <span>Goldene Kekse geklickt</span><span>${fmt(game.golden)}</span>
       <span>Gebäude</span><span>${fmt(game.owned.reduce((a, b) => a + b, 0))}</span>
-      <span>Upgrades</span><span>${game.upgradeCount} / ${TOTAL_UPGRADES}</span>
+      <span>Upgrades</span><span>${game.upgradeCount.toLocaleString('de-DE')} / ${TOTAL_UPGRADES.toLocaleString('de-DE')}</span>
       <span>Erfolge</span><span>${game.achCount()} / ${ACH.length}</span>
       <span>Aufstiege</span><span>${game.ascensions}</span>
       <span>Himmelschips</span><span>${fmt(game.chipsAvailable)} frei / ${fmt(game.chipsEarned)} gesamt</span>

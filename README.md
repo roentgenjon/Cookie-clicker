@@ -1,17 +1,20 @@
 # 🍪 Keks-Imperium
 
-Cookie Clicker mit **10.000 Upgrades**, 15 Gebäuden, goldenen Keksen, 184 Erfolgen, Aufstieg (Himmelschips),
+Cookie Clicker mit **400.000 Upgrades**, 15 Gebäuden, goldenen Keksen, 184 Erfolgen, Aufstieg (Himmelschips),
 Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**, Datenbank auf **Cloudflare (Worker + KV)**.
 
-## Upgrades (genau 10.000)
+## Upgrades (genau 400.000)
 | Art | Anzahl |
 |---|---|
-| Gebäude-Stufen | 2.850 |
-| Klick-Upgrades | 1.500 |
-| Globale Produktion | 2.500 |
-| Synergien (Gebäude ⇄ Gebäude) | 1.050 |
-| Goldene Kekse | 850 |
-| Himmlische Upgrades (kosten Chips, bleiben nach Aufstieg) | 1.250 |
+| Gebäude-Stufen (7.600 je Gebäude) | 114.000 |
+| Klick-Upgrades | 60.000 |
+| Globale Produktion | 100.000 |
+| Synergien (Gebäude ⇄ Gebäude, 200 Stufen) | 42.000 |
+| Goldene Kekse | 34.000 |
+| Himmlische Upgrades (kosten Chips, bleiben nach Aufstieg) | 50.000 |
+
+Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden erst bei Bedarf erzeugt),
+Spielstände speichern die Käufe lauflängenkodiert.
 
 ## Einrichtung
 1. **Cloudflare Worker deployen** – im GitHub-Repo unter *Settings → Secrets and variables → Actions* anlegen:
