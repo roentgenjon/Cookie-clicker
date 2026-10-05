@@ -22,7 +22,7 @@ async function req(path, opts) {
   let r;
   try { r = await fetch(API_URL + path, opts); } catch { throw new Error('Server nicht erreichbar'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(j.error || `Fehler ${r.status}`); e.status = r.status; throw e; }
+  if (!r.ok) { const e = new Error(j.error || `Fehler ${r.status}`); e.status = r.status; e.data = j; throw e; }
   return j;
 }
 const post = (path, method, body, extra = {}) => req(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...extra });
@@ -48,9 +48,11 @@ export const cloud = {
   },
   logout() { ls.del('cc_id'); ls.del('cc_secret'); ls.del('cc_name'); },
 
-  save(data, score, keepalive = false) {
-    return post('/api/save', 'PUT', { id: this.id, secret: this.secret, name: this.name, data, score }, { keepalive });
+  save(data, score, keepalive = false, setup) {
+    return post('/api/save', 'PUT', { id: this.id, secret: this.secret, name: this.name, data, score, setup }, { keepalive });
   },
+  events(since) { return post('/api/events', 'POST', { id: this.id, secret: this.secret, since }); },
+  admin(action, extra = {}) { return post('/api/admin', 'POST', { id: this.id, secret: this.secret, action, ...extra }); },
   load() { return post('/api/load', 'POST', { id: this.id, secret: this.secret }); },
   leaderboard() { return req('/api/leaderboard'); },
 };

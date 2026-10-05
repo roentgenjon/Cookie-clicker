@@ -6,6 +6,10 @@ compatibility_date = "2025-01-01"
 # KV-Datenbank für Spielstände + Rangliste (wird beim ersten Deploy automatisch angelegt)
 [[kv_namespaces]]
 binding = "SAVES"
+id = "0d777baee6b445b29cc6b6bf9332c1b7"
 
 [vars]
 ALLOWED_ORIGIN = "*"
+# Admin-Konten (Namen reserviert). Erste Registrierung nur mit Setup-Code (hier nur der Hash).
+ADMINS = "Avocado3seb,Entity_2806"
+ADMIN_SETUP_HASH = "e0f0d9abd8be54d386fd944f50c3f32ad64df42fb6273c0270baf8b2b1a21240"
