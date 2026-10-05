@@ -61,4 +61,15 @@ const g13 = new Game(); for (let i = 0; i < 400000; i += 2) g13.bought[i] = 1; g
 assert.ok(worst < 100000, 'Schlechtester Fall');
 const g14 = new Game(); g14.load({ v: 1, cookies: 5, bought: 'AAAA', chipsEarned: 3, chipsSpent: 3 }); assert.equal(g14.upgradeCount, 0); assert.equal(g14.chipsSpent, 0);
 console.log(`Sammelkauf ${bought} Upgrades in ${tBuy} ms · Spielstand ${size} Zeichen (alles gekauft: ${full}, schlechtester Fall: ${worst})`);
+// Tägliche Aufgaben, Skins
+const g15 = new Game(); g15.owned[0] = 5; g15.recalc(); g15.ensureDaily();
+assert.equal(g15.daily.tasks.length, 3); assert.equal(new Set(g15.daily.tasks.map((t) => t.type)).size, 3);
+const g15b = new Game(); g15b.ensureDaily(); assert.deepEqual(g15b.daily.tasks.map((t) => t.type), g15.daily.tasks.map((t) => t.type), 'gleiches Datum = gleiche Aufgaben');
+const first = g15.daily.tasks[0]; g15.daily.prog[first.type] = first.target; g15.cookies = 0;
+assert.equal(g15.claimableCount(), 1); const cr = g15.claimDaily(0); assert.ok(cr.reward >= 1000 && g15.cookies >= 1000); assert.equal(g15.claimDaily(0), null, 'nur einmal');
+g15.daily.tasks.forEach((tk, i) => { g15.daily.prog[tk.type] = tk.target; if (i) g15.claimDaily(i); });
+assert.equal(g15.streak, 1); assert.equal(g15.gcs.length, 3, 'Bonus: 3 goldene Kekse');
+const sv = JSON.parse(JSON.stringify(g15.serialize())); const g16 = new Game(); g16.load(sv); assert.equal(g16.daily.claimed.length, 3); assert.equal(g16.streak, 1);
+assert.ok(g16.unlockedSkins().includes('classic')); assert.equal(g16.setSkin('gold'), false); g16.golden = 12; assert.ok(g16.setSkin('fortune')); assert.equal(g16.skin, 'fortune');
+const g17 = new Game(); g17.click(); g17.buyBuilding(0, 1); assert.equal(g17.daily.prog.clicks, 1);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));

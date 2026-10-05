@@ -17,7 +17,9 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['manage', '⚙️ Verwaltung']];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['manage', '⚙️ Verwaltung']];
+const GLOBAL_TABS = ['sched', 'admins']; // gelten nicht für einen einzelnen Spieler
+const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const fld = (label, html, hint = '') => `<label class="fld"><span>${label}</span>${html}${hint ? `<small>${hint}</small>` : ''}</label>`;
 
 export async function renderAdmin(body, { fmt, toast, title }) {
@@ -25,7 +27,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.closest('dialog')?.classList.add('wide');
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
-  let players = []; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  let players = []; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -56,6 +58,17 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     paint();
   }
 
+  const keepType = () => (root.querySelector('#sType') ? root.querySelector('#sType').value : null);
+  const describe = (x) => {
+    if (x.text && !x.event) return `💬 „${x.text}“`;
+    const e = x.event || {};
+    if (e.type === 'golden') return `⭐ ${e.count}× Sterne (${e.effect})`;
+    if (e.type === 'buff') return `🔥 ${e.kind === 'click' ? 'Klick' : 'Kekse'} ×${e.mult} · ${e.seconds} s`;
+    if (e.type === 'cookies') return `🍪 ${fmt(e.amount)} Kekse`;
+    return e.type || '?';
+  };
+  async function loadSched() { try { schedItems = (await cloud.admin('schedList')).items; } catch { schedItems = []; } }
+  async function loadAdmins() { try { adminData = await cloud.admin('adminList'); } catch (e) { adminData = { error: e.message }; } }
   const online = (p) => now - p.updated < 120000;
   function paneHtml() {
     const all = sel === ALL;
@@ -86,6 +99,26 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <button class="adm-go" data-act="msg">💬 ${all ? 'An ALLE senden' : 'Senden'}</button>
         <div class="adm-sec"><h4>💬 Chat</h4><button class="danger" data-act="chatClear">🧹 Gesamten Chat leeren</button></div>
         ${sent.length ? `<div class="adm-sent"><b>Zuletzt gesendet</b>${sent.map((s) => `<div>${esc(s)}</div>`).join('')}</div>` : ''}`;
+      case 'sched': {
+        const st = (keepType()) || 'msg';
+        const items = schedItems ? (schedItems.length ? schedItems.map((x) => `<div class="adm-sched"><span>🕒 ${new Date(x.at).toLocaleString('de-DE')}</span><span>${esc(describe(x))}</span><button class="danger" data-act="schedDel" data-eid="${x.eid}">✖</button></div>`).join('') : '<div class="adm-empty">Nichts geplant.</div>') : '<div class="adm-empty">Lade…</div>';
+        return `<div class="adm-hint">Plant eine Nachricht oder ein Ereignis für <b>ALLE Spieler</b> zu einer bestimmten Uhrzeit. Es wird ausgeführt, sobald danach ein Spieler online ist (meist innerhalb von Sekunden).</div>
+        <div class="adm-grid">${fld('Art', `<select id="sType"><option value="msg" ${st === 'msg' ? 'selected' : ''}>💬 Nachricht</option><option value="golden" ${st === 'golden' ? 'selected' : ''}>⭐ Sterne</option><option value="buff" ${st === 'buff' ? 'selected' : ''}>🔥 Boost</option><option value="cookies" ${st === 'cookies' ? 'selected' : ''}>🍪 Kekse schenken</option></select>`)}${fld('Wann (deine Uhrzeit)', '<input type="datetime-local" id="sWhen">')}</div>
+        ${st === 'msg' ? fld('Nachricht', '<input type="text" id="sText" maxlength="140" placeholder="Text für alle Spieler">') : ''}
+        ${st === 'golden' ? `<div class="adm-grid">${fld('Effekt', `<select id="sEff">${opt(EFFECTS, 'random')}</select>`)}${fld('Anzahl', '<input type="number" id="sCnt" min="1" max="30" value="5">')}</div>` : ''}
+        ${st === 'buff' ? `<div class="adm-grid3">${fld('Art', '<select id="sKind"><option value="frenzy">🍪 Kekse</option><option value="click">👆 Klick</option></select>')}${fld('Multiplikator ×', '<input type="number" id="sMult" min="1" max="1000000" step="any" value="7">')}${fld('Dauer (s)', '<input type="number" id="sSec" min="1" max="3600" value="77">')}</div>` : ''}
+        ${st === 'cookies' ? fld('Menge', '<input type="text" id="sAmt" value="1 mio">', 'z. B. 1 mio, 5e9') : ''}
+        <button class="adm-go" data-act="schedAdd">⏰ Planen</button>
+        <div class="adm-sec"><h4>Geplant (${schedItems ? schedItems.length : '…'})</h4>${items}</div>`;
+      }
+      case 'admins': {
+        if (!adminData) return '<div class="adm-empty">Lade…</div>';
+        if (adminData.error) return `<div class="adm-hint">${esc(adminData.error)}</div>`;
+        return `<div class="adm-hint">Feste Admins können weitere Spieler zu Admins machen. Ernannte Admins haben dieselben Panel-Rechte, können aber keine Admins verwalten.</div>
+        <div class="adm-sec"><h4>🛡️ Feste Admins</h4>${adminData.fixed.map((n) => `<div class="adm-sched"><span>${esc(n)}</span><span class="note">fest</span><span></span></div>`).join('')}</div>
+        <div class="adm-sec"><h4>👑 Ernannte Admins</h4>${adminData.extra.map((x) => `<div class="adm-sched"><span>${esc(x.name)}</span><span></span><button class="danger" data-act="adminDel" data-id="${x.id}">Entfernen</button></div>`).join('') || '<div class="adm-empty">Noch keine.</div>'}</div>
+        <div class="adm-grid">${fld('Spieler hinzufügen (Name)', '<input type="text" id="aName" maxlength="16" placeholder="Name des Spielers">', 'Der Spieler braucht ein Konto')}<div class="adm-btns"><button data-act="adminAdd">➕ Zum Admin machen</button></div></div>`;
+      }
       default: {
         if (all) return '<div class="adm-hint">Die Verwaltung (ansehen, sperren, zurücksetzen, löschen) gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         const cur = players.find((p) => p.id === sel);
@@ -114,13 +147,15 @@ export async function renderAdmin(body, { fmt, toast, title }) {
           </div>
         </aside>
         <section class="adm-main">
-          ${sel ? `<div class="adm-target ${sel === ALL ? 'all' : ''}"><span>🎯 Ziel</span><b>${esc(nameOf(sel))}</b>${cur ? `<small>${online(cur) ? '🟢 online' : '⚪ offline'} · ${fmt(cur.score)} gebacken</small>` : '<small>Rundsendung an alle Spieler</small>'}</div>
+          ${sel && !GLOBAL_TABS.includes(tab) ? `<div class="adm-target ${sel === ALL ? 'all' : ''}"><span>🎯 Ziel</span><b>${esc(nameOf(sel))}</b>${cur ? `<small>${online(cur) ? '🟢 online' : '⚪ offline'} · ${fmt(cur.score)} gebacken</small>` : '<small>Rundsendung an alle Spieler</small>'}</div>` : ''}
           <div class="adm-tabs">${TABS.map(([k, t]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</div>
-          <div class="adm-pane">${paneHtml()}</div>` : '<div class="adm-empty big">👈 Wähle in der Liste einen Spieler oder „Alle Spieler“, um Aktionen zu senden.</div>'}
+          ${GLOBAL_TABS.includes(tab) || sel ? `<div class="adm-pane">${paneHtml()}</div>` : '<div class="adm-empty big">👈 Wähle in der Liste einen Spieler oder „Alle Spieler“, um Aktionen zu senden. Die Reiter „Zeitplan“ und „Admins“ brauchen keine Auswahl.</div>'}
           ${note ? `<div class="adm-status ${note.ok ? 'ok' : 'err'}">${note.ok ? '✔' : '❌'} ${esc(note.text)}</div>` : ''}
         </section>
       </div>`;
     for (const [id, v] of Object.entries(keep)) { const el = root.querySelector('#' + id); if (el && id !== 'q') el.value = v; }
+    const sw = $('#sWhen'); if (sw && !sw.value) sw.value = localInput(new Date(Date.now() + 10 * 60000));
+    const stp = $('#sType'); if (stp) stp.addEventListener('change', paint);
     const mt = $('#msg'); if (mt) { $('#cnt').textContent = `${mt.value.length} / 140`; mt.addEventListener('input', () => { $('#cnt').textContent = `${mt.value.length} / 140`; }); }
     $('#q').addEventListener('input', (e) => { q = e.target.value; const pos = e.target.selectionStart; paint(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); });
   }
@@ -128,9 +163,9 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   const intIn = (s, min, max, def) => { const n = Math.floor(Number(val(s))); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
   root.addEventListener('click', async (e) => {
     const row = e.target.closest('.adm-row[data-id]');
-    if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; return paint(); }
+    if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; return paint(); }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -167,6 +202,23 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         } catch { return; }
         return paint();
       }
+      case 'schedAdd': {
+        const at = new Date(val('#sWhen')).getTime(); if (!Number.isFinite(at)) { say('Bitte Datum und Uhrzeit wählen', false); return paint(); }
+        const st = val('#sType'); let payload = {};
+        if (st === 'msg') { const text = val('#sText').trim(); if (!text) { say('Bitte eine Nachricht eingeben', false); return paint(); } payload = { text }; }
+        else if (st === 'golden') payload = { event: { type: 'golden', effect: val('#sEff'), count: intIn('#sCnt', 1, 30, 1) } };
+        else if (st === 'buff') { const mult = Number(val('#sMult')); if (!(mult >= 1 && mult <= 1e6)) { say('Multiplikator 1 bis 1.000.000', false); return paint(); } payload = { event: { type: 'buff', kind: val('#sKind'), mult, seconds: intIn('#sSec', 1, 3600, 60) } }; }
+        else { const n = parseNum(val('#sAmt')); if (!Number.isFinite(n) || n <= 0) { say('Ungültige Menge', false); return paint(); } payload = { event: { type: 'cookies', amount: n } }; }
+        try { await call('schedAdd', { at, ...payload }); say(`Geplant für ${new Date(at).toLocaleString('de-DE')}`); await loadSched(); } catch { return; }
+        return paint();
+      }
+      case 'schedDel': { try { await call('schedDel', { eid: btn.dataset.eid }); say('Eintrag entfernt'); await loadSched(); } catch { return; } return paint(); }
+      case 'adminAdd': {
+        const name = val('#aName').trim(); if (!name) { say('Bitte einen Namen eingeben', false); return paint(); }
+        try { await call('adminAdd', { name }); say(`${name} ist jetzt Admin`); await loadAdmins(); } catch { return; }
+        return paint();
+      }
+      case 'adminDel': { if (!confirm('Diesem Admin die Rechte entziehen?')) return; try { await call('adminDel', { target: btn.dataset.id }); say('Admin entfernt'); await loadAdmins(); } catch { return; } return paint(); }
       case 'mute': {
         const min = +btn.dataset.min;
         try { await call('mute', { target: sel, minutes: min }); say(min ? `${nameOf(sel)} ist ${min >= 60 ? min / 60 + ' Std' : min + ' Min'} stumm` : `${nameOf(sel)} darf wieder schreiben`); await refresh(); } catch { return; }

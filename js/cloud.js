@@ -48,13 +48,15 @@ export const cloud = {
   },
   logout() { ls.del('cc_id'); ls.del('cc_secret'); ls.del('cc_name'); },
 
-  save(data, score, keepalive = false, setup) {
-    return post('/api/save', 'PUT', { id: this.id, secret: this.secret, name: this.name, data, score, setup }, { keepalive });
+  save(data, score, keepalive = false, setup, stats) {
+    return post('/api/save', 'PUT', { id: this.id, secret: this.secret, name: this.name, data, score, setup, stats }, { keepalive });
   },
   events(since) { return post('/api/events', 'POST', { id: this.id, secret: this.secret, since }); },
   admin(action, extra = {}) { return post('/api/admin', 'POST', { id: this.id, secret: this.secret, action, ...extra }); },
   load() { return post('/api/load', 'POST', { id: this.id, secret: this.secret }); },
   chat() { return req('/api/chat'); },
   chatSend(text) { return post('/api/chat/send', 'POST', { id: this.id, secret: this.secret, text }); },
-  leaderboard() { return req('/api/leaderboard'); },
+  leaderboard(by = 'score') { return req(`/api/leaderboard?by=${by}&id=${this.id || ''}`); },
+  players() { return req('/api/players'); },
+  gift(to, amount) { return post('/api/gift', 'POST', { id: this.id, secret: this.secret, to, amount }); },
 };

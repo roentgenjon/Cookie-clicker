@@ -16,6 +16,15 @@ Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**
 Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden erst bei Bedarf erzeugt),
 Spielstände speichern die Käufe lauflängenkodiert.
 
+## Weitere Funktionen
+- 💬 Chat für alle Spieler (Moderation durch Admins: löschen, stumm schalten, leeren)
+- 🔊 Sound und 🌧️ Keks-Regen (in den Optionen abschaltbar)
+- 🏆 Rangliste nach Gesamt-Keksen, Kekse pro Sekunde und Aufstiegen, mit eigenem Platz
+- 📅 Tägliche Aufgaben mit Serie und Tagesbonus
+- 🎨 13 freischaltbare Keks-Skins
+- 🎁 Geschenke zwischen Spielern (max. 50 % des Vorrats, 5 pro Tag)
+- 🛡️ Admin-Panel: Sterne spawnen, Boosts, Geben, Upgrades, Nachrichten, Zeitplan, Admins ernennen, sperren/stumm/zurücksetzen/löschen
+
 ## Einrichtung
 1. **Cloudflare Worker deployen** – im GitHub-Repo unter *Settings → Secrets and variables → Actions* anlegen:
    `CLOUDFLARE_API_TOKEN` und `CLOUDFLARE_ACCOUNT_ID`, dann Workflow „Deploy Cloudflare Worker“ starten
