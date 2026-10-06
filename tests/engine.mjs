@@ -95,4 +95,18 @@ sg.cookies = 1e9; assert.ok(sg.buySound('lofi')); assert.ok(sg.selectSound('lofi
 sg.total = 8e12; sg.ascend(); assert.equal(sg.sounds.pack, 'retro', 'bleibt beim Aufstieg');
 const sg2 = new Game(); sg2.load(JSON.parse(JSON.stringify(sg.serialize()))); assert.deepEqual(sg2.sounds, sg.sounds);
 const sg3 = new Game(); sg3.load({ v: 2, sounds: { owned: ['zen', 'unsinn'], pack: 'epic', track: 'calm' } }); assert.equal(sg3.sounds.pack, 'classic', 'nicht besessen -> klassisch'); assert.ok(sg3.sounds.owned.includes('zen') && !sg3.sounds.owned.includes('unsinn'));
+// Mega-Upgrades
+import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
+  assert.equal(TOTAL_ALL, 10n ** 16n); assert.equal(SERIES.length, 100);
+  const mg = new Game(); mg.owned[0] = 20; mg.recalc(); const b0 = mg.baseCps;
+  assert.equal(mg.seriesVisible(0), true); assert.equal(mg.seriesVisible(6), false, 'Silber braucht 50');
+  assert.equal(mg.buySeries(0), 0, 'kein Geld'); mg.cookies = 1e6;
+  assert.equal(mg.buySeries(0, 1), 1); assert.ok(Math.abs(mg.baseCps / b0 - 1.0008) < 1e-9);
+  const lvl = mg.buySeries(0, 'max'); assert.ok(lvl > 50 && mg.cookies >= 0); assert.equal(mg.series[0], 1 + lvl);
+  assert.ok(Math.abs(mg.baseCps / b0 - Math.pow(1.0008, 1 + lvl)) < 1e-6, 'Wirkung wächst mit Stufen');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(mg.serialize()))); assert.equal(sv.series[0], mg.series[0]); assert.ok(Math.abs(sv.baseCps / mg.baseCps - 1) < 1e-9);
+  mg.total = 8e12; mg.ascend(); assert.equal(mg.series[0], 0, 'Reihen werden beim Aufstieg zurückgesetzt');
+  const huge = new Game(); huge.owned[0] = 600; huge.cookies = 1e300; huge.recalc(); const got = huge.buySeries(5, 'max'); assert.ok(got > 1000 && Number.isFinite(huge.cps), `riesige Stufenzahl: ${got}`);
+  const bad = new Game(); bad.load({ v: 2, series: ['x', -5, 1e30, 3] }); assert.deepEqual(bad.series.slice(0, 4), [0, 0, SERIES_LEVELS, 3]);
+});
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));
