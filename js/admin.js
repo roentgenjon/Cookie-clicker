@@ -3,9 +3,19 @@
 import { BUILDINGS } from './data.js';
 import { cloud } from './cloud.js';
 
+import { Big, ZERO } from './big.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const SUFFIX = { k: 1e3, m: 1e6, mio: 1e6, b: 1e9, mrd: 1e9, t: 1e12, bio: 1e12, qa: 1e15, qi: 1e18 };
+const SUFFIX = { k: 1e3, m: 1e6, mio: 1e6, b: 1e9, mrd: 1e9, t: 1e12, bio: 1e12, brd: 1e15, qa: 1e15, trl: 1e18, qi: 1e18, trd: 1e21, sx: 1e21, sp: 1e24, oc: 1e27, no: 1e30, dc: 1e33 };
 // "1,5 mio" / "2e9" / "10k" -> Zahl
+// wie parseNum, aber als Big (bis 9,99e999, z. B. "5e500"); ungültig = 0
+export function parseBig(txt) {
+  const m = /^\s*([\d.,]+)(?:e([+-]?\d+))?\s*([a-z]*)\s*$/i.exec(String(txt));
+  if (!m) return ZERO;
+  const base = Number(m[1].replace(',', '.')); const mult = m[3] ? SUFFIX[m[3].toLowerCase()] : 1;
+  if (!(base > 0) || !mult) return ZERO;
+  const ex = m[2] ? Number(m[2]) : 0; if (ex > 999) return ZERO;
+  return Big.norm(base * mult, ex).clamp();
+}
 export function parseNum(txt) {
   const m = /^\s*(-?[\d.,]+(?:e[+-]?\d+)?)\s*([a-z]*)\s*$/i.exec(String(txt));
   if (!m) return NaN;
@@ -64,7 +74,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const e = x.event || {};
     if (e.type === 'golden') return `⭐ ${e.count}× Sterne (${e.effect})`;
     if (e.type === 'buff') return `🔥 ${e.kind === 'click' ? 'Klick' : 'Kekse'} ×${e.mult} · ${e.seconds} s`;
-    if (e.type === 'cookies') return `🍪 ${fmt(e.amount)} Kekse`;
+    if (e.type === 'cookies') return `🍪 ${String(e.amount).startsWith('-') ? '−' : ''}${fmt(String(e.amount).replace(/^-/, ''))} Kekse`;
     return e.type || '?';
   };
   async function loadSched() { try { schedItems = (await cloud.admin('schedList')).items; } catch { schedItems = []; } }
@@ -179,8 +189,8 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       }
       case 'preset': return send({ type: 'buff', kind: btn.dataset.k, mult: +btn.dataset.m, seconds: +btn.dataset.s }, `${btn.dataset.k === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${btn.dataset.m}`);
       case 'cGive': case 'cTake': {
-        const n = parseNum(val('#cAmt')); if (!Number.isFinite(n) || n <= 0) { say('Ungültige Zahl (z. B. 1 mio, 5e9, 10k)', false); return paint(); }
-        return send({ type: 'cookies', amount: act === 'cGive' ? n : -n }, `${act === 'cGive' ? '+' : '−'}${fmt(n)} Kekse`);
+        const n = parseBig(val('#cAmt')); if (n.isZero()) { say('Ungültige Zahl (z. B. 1 mio, 5e9, 10k)', false); return paint(); }
+        return send({ type: 'cookies', amount: (act === 'cGive' ? '' : '-') + n.toString() }, `${act === 'cGive' ? '+' : '−'}${fmt(n)} Kekse`);
       }
       case 'chips': return send({ type: 'chips', amount: intIn('#chAmt', 1, 1e9, 1) }, `${intIn('#chAmt', 1, 1e9, 1)} Chips`);
       case 'building': return send({ type: 'building', b: intIn('#bSel', 0, 14, 0), amount: intIn('#bAmt', 1, 100000, 1) }, `${intIn('#bAmt', 1, 100000, 1)}× ${BUILDINGS[intIn('#bSel', 0, 14, 0)].name}`);
@@ -198,7 +208,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'inspect': {
         try {
           const d = await call('inspect', { target: sel });
-          info = `Name: ${d.name}\nKekse: ${fmt(d.cookies || 0)} · gebacken (Runde): ${fmt(d.total || 0)} · früher: ${fmt(d.totalReset || 0)}\nKlicks: ${fmt(d.clicks || 0)} · goldene Kekse: ${d.golden || 0}\nGebäude: ${(d.owned || []).map((n, i) => n ? `${BUILDINGS[i].name} ${n}` : '').filter(Boolean).join(', ') || '–'}\nUpgrades: ${d.upgrades}/400000 · Erfolge: ${d.achievements}\nAufstiege: ${d.ascensions || 0} · Chips: ${d.chipsEarned || 0} (ausgegeben ${d.chipsSpent || 0})\nLetzte Speicherung: ${new Date(d.lastSave).toLocaleString('de-DE')}${d.banned ? '\n🚫 GESPERRT' : ''}`;
+          info = `Name: ${d.name}\nKekse: ${fmt(Big.parse(d.cookies))} · gebacken (Runde): ${fmt(Big.parse(d.total))} · früher: ${fmt(Big.parse(d.totalReset))}\nKlicks: ${fmt(d.clicks || 0)} · goldene Kekse: ${d.golden || 0}\nGebäude: ${(d.owned || []).map((n, i) => n ? `${BUILDINGS[i].name} ${n}` : '').filter(Boolean).join(', ') || '–'}\nUpgrades: ${d.upgrades}/400000 · Erfolge: ${d.achievements}\nAufstiege: ${d.ascensions || 0} · Chips: ${d.chipsEarned || 0} (ausgegeben ${d.chipsSpent || 0})\nLetzte Speicherung: ${new Date(d.lastSave).toLocaleString('de-DE')}${d.banned ? '\n🚫 GESPERRT' : ''}`;
         } catch { return; }
         return paint();
       }
@@ -208,7 +218,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (st === 'msg') { const text = val('#sText').trim(); if (!text) { say('Bitte eine Nachricht eingeben', false); return paint(); } payload = { text }; }
         else if (st === 'golden') payload = { event: { type: 'golden', effect: val('#sEff'), count: intIn('#sCnt', 1, 30, 1) } };
         else if (st === 'buff') { const mult = Number(val('#sMult')); if (!(mult >= 1 && mult <= 1e6)) { say('Multiplikator 1 bis 1.000.000', false); return paint(); } payload = { event: { type: 'buff', kind: val('#sKind'), mult, seconds: intIn('#sSec', 1, 3600, 60) } }; }
-        else { const n = parseNum(val('#sAmt')); if (!Number.isFinite(n) || n <= 0) { say('Ungültige Menge', false); return paint(); } payload = { event: { type: 'cookies', amount: n } }; }
+        else { const n = parseBig(val('#sAmt')); if (n.isZero()) { say('Ungültige Menge', false); return paint(); } payload = { event: { type: 'cookies', amount: n.toString() } }; }
         try { await call('schedAdd', { at, ...payload }); say(`Geplant für ${new Date(at).toLocaleString('de-DE')}`); await loadSched(); } catch { return; }
         return paint();
       }

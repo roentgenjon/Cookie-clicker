@@ -2,7 +2,8 @@
 import { SKINS, TASK_INFO, ITEMS, itemCost, itemMaxAffordable, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
-import { parseNum } from './admin.js';
+import { parseBig } from './admin.js';
+import { Big } from './big.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -40,17 +41,17 @@ export async function renderGift(body, { game, fmt, toast, title, save }) {
     <button type="submit" class="adm-go" id="gGo">🎁 Schenken</button><div class="note" id="gMsg"></div></form>`;
   const msg = (t) => { body.querySelector('#gMsg').textContent = t; };
   cloud.players().then((r) => { body.querySelector('#gList').innerHTML = r.players.filter((n) => n !== cloud.name).map((n) => `<option value="${esc(n)}">`).join(''); }).catch(() => {});
-  body.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { body.querySelector('#gAmt').value = String(Math.floor(game.cookies * +b.dataset.p)); }));
+  body.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { body.querySelector('#gAmt').value = game.cookies.mulN(+b.dataset.p).floor().toString().replace(/e(\d+)$/, 'e+$1'); }));
   body.querySelector('#giftForm').addEventListener('submit', async (e) => {
-    e.preventDefault(); const to = body.querySelector('#gTo').value.trim(); const amount = parseNum(body.querySelector('#gAmt').value);
+    e.preventDefault(); const to = body.querySelector('#gTo').value.trim(); const amount = parseBig(body.querySelector('#gAmt').value);
     if (!to) return msg('❌ Bitte einen Empfänger eingeben');
-    if (!Number.isFinite(amount) || amount < 1) return msg('❌ Ungültige Menge');
-    if (amount > game.cookies) return msg('❌ So viele Kekse hast du nicht');
+    if (amount.lt(1)) return msg('❌ Ungültige Menge');
+    if (amount.gt(game.cookies)) return msg('❌ So viele Kekse hast du nicht');
     body.querySelector('#gGo').disabled = true; msg('Sende…');
     try {
       await save(); // aktuellen Vorrat speichern, der Server prüft das Limit anhand davon
-      const r = await cloud.gift(to, amount);
-      game.cookies = Math.max(0, game.cookies - amount);
+      const r = await cloud.gift(to, amount.toString());
+      game.cookies = game.cookies.sub(amount);
       toast(`🎁 ${fmt(amount)} Kekse an ${esc(r.to || to)} geschickt (heute noch ${r.left} Geschenke)`);
       msg(`✔ Geschickt! Heute noch ${r.left} Geschenke.`); body.querySelector('#gAmt').value = '';
     } catch (err) { msg('❌ ' + err.message); }
@@ -61,7 +62,7 @@ export async function renderGift(body, { game, fmt, toast, title, save }) {
 let itemAmt = 1; // 1 / 10 / 100 / 'max'
 const itemN = (it, game) => (itemAmt === 'max' ? Math.max(1, itemMaxAffordable(it, game.itemCount(it.id), game.cookies)) : itemAmt);
 // Schlüssel für das Neuzeichnen: ändert sich, wenn sich Besitz oder Leistbarkeit ändert
-export function itemsStateKey(game) { return JSON.stringify(game.items) + itemAmt + ITEMS.map((it) => (game.cookies >= itemCost(it, game.itemCount(it.id), itemN(it, game)) ? 1 : 0)).join(''); }
+export function itemsStateKey(game) { return JSON.stringify(game.items) + itemAmt + ITEMS.map((it) => (game.cookies.gte(itemCost(it, game.itemCount(it.id), itemN(it, game))) ? 1 : 0)).join(''); }
 
 export function renderItems(body, { game, fmt, toast, title, changed, buySound }) {
   title('🛒 Item-Shop');
@@ -72,7 +73,7 @@ export function renderItems(body, { game, fmt, toast, title, changed, buySound }
       <div class="seg" id="itemAmt">${[1, 10, 100, 'max'].map((n) => `<button data-n="${n}" class="${n === itemAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
     <p class="note">Items kannst du <b>beliebig oft</b> kaufen, jedes Exemplar gibt den Bonus dazu. Der Preis steigt mit jedem Exemplar um 12 %. Alles <b>bleibt beim Aufstieg erhalten</b>. Du hast ${fmt(game.cookies)} 🍪</p>
     <div class="items">${ITEMS.map((it) => {
-      const have = game.itemCount(it.id); const n = itemN(it, game); const cost = itemCost(it, have, n); const can = game.cookies >= cost;
+      const have = game.itemCount(it.id); const n = itemN(it, game); const cost = itemCost(it, have, n); const can = game.cookies.gte(cost);
       return `<div class="item ${have ? 'has' : ''} ${it.best ? 'best' : ''}"><div class="ie">${it.emoji}</div><div class="in"><b>${it.name}</b>${it.best ? ' <span class="tag">BESTES ITEM</span>' : ''}<div class="ip">+${it.pct.toLocaleString('de-DE')} % Kekse je Stück</div><div class="have">Du hast: <b>${have.toLocaleString('de-DE')}</b>${have ? ` (+${(have * it.pct).toLocaleString('de-DE')} %)` : ''}</div></div><button data-item="${it.id}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${fmt(cost)}</button></div>`;
     }).join('')}</div></div>`;
   const redraw = () => renderItems(body, { game, fmt, toast, title, changed, buySound });
@@ -93,7 +94,7 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
       <div class="seg" id="sTabs"><button data-t="pack" class="${soundTab === 'pack' ? 'on' : ''}">🔊 Klänge</button><button data-t="track" class="${soundTab === 'track' ? 'on' : ''}">🎵 Musik</button></div></div>
     ${soundTab === 'track' ? '<p class="note">Die Musik schaltest du in den ⚙️ Optionen an oder aus. Das gewählte Stück spielt dann im Hintergrund.</p>' : ''}
     <div class="items">${list.map((d) => {
-      const own = game.soundOwned(d.id); const can = !own && game.cookies >= d.cost; const isActive = own && d.id === active;
+      const own = game.soundOwned(d.id); const can = !own && game.cookies.gte(d.cost); const isActive = own && d.id === active;
       return `<div class="item ${own ? 'has' : ''} ${isActive ? 'best' : ''}"><div class="ie">${d.emoji}</div><div class="in"><b>${d.name}</b> ${isActive ? '<span class="tag">AKTIV</span>' : ''}<div class="have">${d.desc}</div></div><div class="sbtns"><button data-prev="${d.id}" title="Anhören">▶ Hören</button>${own ? `<button data-use="${d.id}" ${isActive ? 'disabled' : ''}>${isActive ? '✔ Aktiv' : 'Benutzen'}</button>` : `<button data-buy="${d.id}" ${can ? '' : 'disabled'}>🍪 ${fmt(d.cost)}</button>`}</div></div>`;
     }).join('')}</div></div>`;
   const redraw = () => renderSoundShop(body, { game, fmt, toast, title, changed, buySound, preview, apply });
@@ -109,20 +110,20 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
 let megaAmt = 1; // 1 / 10 / 100 / 1000 / 'max'
 const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, seriesMaxAffordable(SERIES[i], game.series[i], game.cookies)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
 const big = (n) => BigInt(Math.floor(n)).toLocaleString('de-DE');
-export function megaStateKey(game) { return game.series.join() + megaAmt + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies >= seriesCost(SERIES[i], game.series[i], megaN(i, game)) ? 2 : 1) : 0)).join(''); }
+export function megaStateKey(game) { return game.series.join() + megaAmt + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies.gte(seriesCost(SERIES[i], game.series[i], megaN(i, game))) ? 2 : 1) : 0)).join(''); }
 
 export function renderMega(body, { game, fmt, toast, title, changed, buySound }) {
   title('♾️ Mega-Upgrades');
   const vis = SERIES.map((_, i) => i).filter((i) => game.seriesVisible(i));
-  vis.sort((a, b) => game.seriesPrice(a, 1) - game.seriesPrice(b, 1));
+  vis.sort((a, b) => game.seriesPrice(a, 1).cmp(game.seriesPrice(b, 1)));
   const locked = SERIES.map((_, i) => i).filter((i) => !game.seriesVisible(i)).sort((a, b) => (SERIES[a].need || 0) - (SERIES[b].need || 0) || (SERIES[a].baked || 0) - (SERIES[b].baked || 0));
   body.innerHTML = `<div class="stack">
     <div class="shop-top"><div><b>${big(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</b><div class="note">Upgrades gekauft (normale + Mega-Stufen)</div></div>
       <div class="seg" id="mgAmt">${[1, 10, 100, 1000, 'max'].map((n) => `<button data-n="${n}" class="${n === megaAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
     <p class="note">Jede Reihe hat knapp <b>100 Billionen Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
     <div class="items">${vis.map((i) => {
-      const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = Number.isFinite(cost) && game.cookies >= cost;
-      return `<div class="item ${have ? 'has' : ''}"><div class="ie">${s.icon}<small class="ib">${s.badge}</small></div><div class="in"><b>${s.name}</b><div class="ip">${seriesDesc(s).split(': ').pop()}</div><div class="have">Stufe <b>${big(have)}</b>${have ? ` · aktuell ×${fmt(seriesFactor(s, have))}` : ''}</div></div><button data-mg="${i}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${Number.isFinite(cost) ? fmt(cost) : '∞'}</button></div>`;
+      const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = game.cookies.gte(cost);
+      return `<div class="item ${have ? 'has' : ''}"><div class="ie">${s.icon}<small class="ib">${s.badge}</small></div><div class="in"><b>${s.name}</b><div class="ip">${seriesDesc(s).split(': ').pop()}</div><div class="have">Stufe <b>${big(have)}</b>${have ? ` · aktuell ×${fmt(seriesFactor(s, have))}` : ''}</div></div><button data-mg="${i}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${fmt(cost)}</button></div>`;
     }).join('') || '<div class="adm-empty">Noch keine Reihe freigeschaltet. Kaufe Gebäude!</div>'}</div>
     ${locked.length ? `<div class="adm-sec"><h4>🔒 ${locked.length} weitere Reihen gesperrt</h4>${locked.slice(0, 5).map((i) => `<div class="adm-sched"><span>${SERIES[i].icon}</span><span>${SERIES[i].name}</span><span class="note">${seriesNeedText(SERIES[i])}</span></div>`).join('')}</div>` : ''}</div>`;
   const redraw = () => renderMega(body, { game, fmt, toast, title, changed, buySound });
