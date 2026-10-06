@@ -246,7 +246,7 @@ function renderSettings() {
   $('#modalBody').innerHTML = `<div class="stack">
     <label>Name deiner Bäckerei<input type="text" id="setName" maxlength="16" value="${esc(game.name)}"></label>
     <div class="rowf"><button id="setTheme">🌓 Design wechseln</button><button id="setPart">✨ Partikel: ${particles ? 'an' : 'aus'}</button><button id="saveNow">💾 Jetzt speichern</button></div>
-    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button></div>
+    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button></div>
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
@@ -254,6 +254,7 @@ function renderSettings() {
   $('#setTheme').addEventListener('click', () => { const n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = n; ls.set('cc_theme', n); });
   $('#setPart').addEventListener('click', () => { particles = !particles; ls.set('cc_particles', particles ? '1' : '0'); renderSettings(); });
   $('#setSound').addEventListener('click', () => { sound.setEnabled(!sound.enabled); sound.click(); renderSettings(); });
+  $('#testSound').addEventListener('click', async () => { const st = await sound.test(); toast(st === 'running' ? '🔔 Spielt der Ton? Wenn nicht: Lautstärke hochdrehen und den Stummschalter (Klingeln aus) des Geräts prüfen.' : `🔇 Audio blockiert (Status: ${st}). Tippe noch einmal auf den Knopf.`); });
   $('#setRain').addEventListener('click', () => { rain = !rain; ls.set('cc_rain', rain ? '1' : '0'); renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
