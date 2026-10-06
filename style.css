@@ -150,3 +150,4 @@ textarea#msg{min-height:84px;resize:vertical}
 .item-bar small{position:absolute;right:-6px;bottom:-4px;background:var(--accent);color:#000;border-radius:8px;padding:0 4px;font-size:10px;font-weight:700;line-height:14px}
 .item .have{color:var(--mute);font-size:13px;margin-top:2px}.item .have b{color:var(--text)}
 .item.has{opacity:1}
+.sbtns{display:flex;flex-direction:column;gap:6px}.sbtns button{white-space:nowrap}

@@ -1,4 +1,4 @@
-import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemMultiplier, itemCost, itemMaxAffordable } from './extras.js';
+import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemMultiplier, itemCost, itemMaxAffordable, soundDef, soundKind } from './extras.js';
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
@@ -48,6 +48,7 @@ export class Game {
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.items = {}; // gekaufte Shop-Items { id: Anzahl } (bleiben beim Aufstieg)
+    this.sounds = { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' }; // Sound-Shop (bleibt beim Aufstieg)
     this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 }, claimed: [], streak: 0, lastDone: '' };
     this.buffs = []; this.gcs = []; this.gid = 0; this.nextGolden = 60;
     this.recalc();
@@ -104,6 +105,16 @@ export class Game {
     this.baseCps = sum * this.globalMult * (1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * this.itemMult;
   }
   get itemMult() { return itemMultiplier(this.items); }
+  // ---- Sound-Shop ----
+  soundOwned(id) { return this.sounds.owned.includes(id); }
+  buySound(id) {
+    const d = soundDef(id); if (!d || this.soundOwned(id) || this.cookies < d.cost) return false;
+    this.cookies -= d.cost; this.sounds.owned.push(id); return true;
+  }
+  selectSound(id) {
+    const k = soundKind(id); if (!k || !this.soundOwned(id)) return false;
+    this.sounds[k] = id; return true;
+  }
   itemCount(id) { return this.items[id] || 0; }
   // n = Anzahl oder 'max'
   buyItem(id, n = 1) {
@@ -315,7 +326,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies, total: this.total, totalReset: this.totalReset, clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items,
+      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds,
     };
   }
   load(d) {
@@ -331,6 +342,12 @@ export class Game {
     this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
+    if (d.sounds && typeof d.sounds === 'object') {
+      const own = Array.isArray(d.sounds.owned) ? d.sounds.owned.filter((id) => soundKind(id)) : [];
+      this.sounds.owned = [...new Set(['classic', 'calm', ...own])];
+      this.sounds.pack = soundKind(d.sounds.pack) === 'pack' && this.sounds.owned.includes(d.sounds.pack) ? d.sounds.pack : 'classic';
+      this.sounds.track = soundKind(d.sounds.track) === 'track' && this.sounds.owned.includes(d.sounds.track) ? d.sounds.track : 'calm';
+    }
     if (Array.isArray(d.items)) { this.items = {}; for (const id of d.items) if (itemById(id)) this.items[id] = 1; } // alte Spielstände: je 1
     else if (d.items && typeof d.items === 'object') { this.items = {}; for (const [id, n] of Object.entries(d.items)) if (itemById(id) && Number.isInteger(n) && n > 0) this.items[id] = Math.min(n, 1e9); }
     const dl = d.daily;

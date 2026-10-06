@@ -49,6 +49,7 @@ export function genTasks(date, baseCps) {
 // ---- Item-Shop: beliebig oft kaufbar, jedes Exemplar gibt dauerhaft +x % Produktion und Klickertrag ----
 // Der Preis steigt mit jedem Exemplar (×1,12). Items bleiben beim Aufstieg erhalten.
 export const ITEM_GROWTH = 1.12;
+const PRICE_FACTOR = 1e9; // alle Item-Preise sind ×1.000.000.000
 export const ITEMS = [
   { id: 'choco', name: 'Schoko-Keks', emoji: '🍪', pct: 15, cost: 1e5 },
   { id: 'milk', name: 'Glas Milch', emoji: '🥛', pct: 25, cost: 5e6 },
@@ -61,7 +62,7 @@ export const ITEMS = [
   { id: 'energy', name: 'Energy-Drink', emoji: '⚡', pct: 600, cost: 1e20 },
   { id: 'cake', name: 'Goldene Torte', emoji: '🎂', pct: 800, cost: 1e23 },
   { id: 'icetea', name: 'Eistee-Flasche', emoji: '🥤', pct: 1000, cost: 1e27, best: true },
-];
+].map((it) => ({ ...it, cost: it.cost * PRICE_FACTOR }));
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
 // owned = { id: Anzahl }
 export const itemMultiplier = (owned) => 1 + ITEMS.reduce((a, it) => a + it.pct * (owned[it.id] || 0), 0) / 100;
@@ -70,3 +71,21 @@ export function itemMaxAffordable(it, have, cookies) {
   const n = Math.floor(Math.log(1 + (cookies * (ITEM_GROWTH - 1)) / (it.cost * Math.pow(ITEM_GROWTH, have))) / Math.log(ITEM_GROWTH));
   return Math.max(0, n);
 }
+
+// ---- Sound-Shop: Klang-Pakete und Musikstücke, einmalig für Kekse kaufen ----
+export const SOUND_PACKS = [
+  { id: 'classic', name: 'Klassisch', emoji: '🍪', desc: 'Knuspriges Keks-Knacken, Münzen und Glocken', cost: 0 },
+  { id: 'retro', name: '8-Bit Retro', emoji: '👾', desc: 'Piepsen und Blips wie auf alten Spielautomaten', cost: 1e7 },
+  { id: 'zen', name: 'Zen-Garten', emoji: '🎋', desc: 'Weiche Holzklänge, Klangschalen und Kalimba', cost: 1e9 },
+  { id: 'space', name: 'Weltraum', emoji: '🚀', desc: 'Laser, Sonar und schwebende Synthesizer', cost: 1e11 },
+  { id: 'epic', name: 'Episch', emoji: '🎺', desc: 'Pauken, Fanfaren und Harfen', cost: 1e13 },
+];
+export const MUSIC_TRACKS = [
+  { id: 'calm', name: 'Ruhige Backstube', emoji: '🎹', desc: 'Sanfte, wechselnde Klaviermelodie', cost: 0 },
+  { id: 'lofi', name: 'Lo-Fi Teigpause', emoji: '☕', desc: 'Entspannter Beat mit Schallplatten-Knistern', cost: 1e8 },
+  { id: 'chip', name: 'Chiptune-Kekse', emoji: '🕹️', desc: 'Schneller 8-Bit-Soundtrack', cost: 1e10 },
+  { id: 'ambient', name: 'Sternen-Ofen', emoji: '🌌', desc: 'Weite, langsame Klangflächen', cost: 1e12 },
+  { id: 'epic', name: 'Keks-Imperium', emoji: '🏰', desc: 'Dunkle Streicher und Pauken', cost: 1e14 },
+];
+export const soundDef = (id) => SOUND_PACKS.find((x) => x.id === id) || MUSIC_TRACKS.find((x) => x.id === id);
+export const soundKind = (id) => (SOUND_PACKS.some((x) => x.id === id) ? 'pack' : MUSIC_TRACKS.some((x) => x.id === id) ? 'track' : null);

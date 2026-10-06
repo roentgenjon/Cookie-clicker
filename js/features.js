@@ -1,5 +1,5 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
-import { SKINS, TASK_INFO, ITEMS, itemCost, itemMaxAffordable } from './extras.js';
+import { SKINS, TASK_INFO, ITEMS, itemCost, itemMaxAffordable, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
 import { parseNum } from './admin.js';
 
@@ -79,5 +79,27 @@ export function renderItems(body, { game, fmt, toast, title, changed, buySound }
   body.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
     const it = ITEMS.find((x) => x.id === b.dataset.item); const got = game.buyItem(it.id, itemN(it, game));
     if (got) { buySound(); toast(`🛒 ${got.toLocaleString('de-DE')}× <b>${it.emoji} ${it.name}</b> gekauft: +${(got * it.pct).toLocaleString('de-DE')} % Kekse!`); changed(); redraw(); }
+  }));
+}
+
+let soundTab = 'pack';
+export function renderSoundShop(body, { game, fmt, toast, title, changed, buySound, preview, apply }) {
+  title('🔊 Sound-Shop');
+  const list = soundTab === 'pack' ? SOUND_PACKS : MUSIC_TRACKS;
+  const active = soundTab === 'pack' ? game.sounds.pack : game.sounds.track;
+  body.innerHTML = `<div class="stack">
+    <div class="shop-top"><div><b>${soundTab === 'pack' ? 'Klang-Pakete' : 'Musikstücke'}</b><div class="note">Kaufe sie einmal für Kekse, sie bleiben beim Aufstieg erhalten. Du hast ${fmt(game.cookies)} 🍪</div></div>
+      <div class="seg" id="sTabs"><button data-t="pack" class="${soundTab === 'pack' ? 'on' : ''}">🔊 Klänge</button><button data-t="track" class="${soundTab === 'track' ? 'on' : ''}">🎵 Musik</button></div></div>
+    ${soundTab === 'track' ? '<p class="note">Die Musik schaltest du in den ⚙️ Optionen an oder aus. Das gewählte Stück spielt dann im Hintergrund.</p>' : ''}
+    <div class="items">${list.map((d) => {
+      const own = game.soundOwned(d.id); const can = !own && game.cookies >= d.cost; const isActive = own && d.id === active;
+      return `<div class="item ${own ? 'has' : ''} ${isActive ? 'best' : ''}"><div class="ie">${d.emoji}</div><div class="in"><b>${d.name}</b> ${isActive ? '<span class="tag">AKTIV</span>' : ''}<div class="have">${d.desc}</div></div><div class="sbtns"><button data-prev="${d.id}" title="Anhören">▶ Hören</button>${own ? `<button data-use="${d.id}" ${isActive ? 'disabled' : ''}>${isActive ? '✔ Aktiv' : 'Benutzen'}</button>` : `<button data-buy="${d.id}" ${can ? '' : 'disabled'}>🍪 ${fmt(d.cost)}</button>`}</div></div>`;
+    }).join('')}</div></div>`;
+  const redraw = () => renderSoundShop(body, { game, fmt, toast, title, changed, buySound, preview, apply });
+  body.querySelectorAll('#sTabs [data-t]').forEach((b) => b.addEventListener('click', () => { soundTab = b.dataset.t; redraw(); }));
+  body.querySelectorAll('[data-prev]').forEach((b) => b.addEventListener('click', () => preview(soundTab, b.dataset.prev)));
+  body.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', () => { if (game.selectSound(b.dataset.use)) { apply(); changed(); preview(soundTab, b.dataset.use); redraw(); } }));
+  body.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.buy; if (game.buySound(id)) { game.selectSound(id); apply(); buySound(); toast(`🔊 <b>${(list.find((d) => d.id === id) || {}).name}</b> gekauft und aktiviert!`); changed(); redraw(); }
   }));
 }

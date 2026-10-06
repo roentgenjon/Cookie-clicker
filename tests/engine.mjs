@@ -73,16 +73,26 @@ const sv = JSON.parse(JSON.stringify(g15.serialize())); const g16 = new Game(); 
 assert.ok(g16.unlockedSkins().includes('classic')); assert.equal(g16.setSkin('gold'), false); g16.golden = 12; assert.ok(g16.setSkin('fortune')); assert.equal(g16.skin, 'fortune');
 const g17 = new Game(); g17.click(); g17.buyBuilding(0, 1); assert.equal(g17.daily.prog.clicks, 1);
 // Item-Shop (beliebig oft kaufbar)
-const g18 = new Game(); g18.owned[1] = 10; g18.recalc(); const base18 = g18.baseCps; g18.cookies = 1e6;
+const g18 = new Game(); g18.owned[1] = 10; g18.recalc(); const base18 = g18.baseCps; g18.cookies = 1e16;
 assert.equal(g18.buyItem('choco'), 1); assert.ok(Math.abs(g18.baseCps / base18 - 1.15) < 1e-9, '+15 %');
-const cost2 = 1e5 * 1.12; const before = g18.cookies; assert.equal(g18.buyItem('choco'), 1); assert.ok(Math.abs(before - g18.cookies - cost2) < 1e-6, 'Preis steigt ×1,12');
+const cost2 = 1e14 * 1.12; const before = g18.cookies; assert.equal(g18.buyItem('choco'), 1); assert.ok(Math.abs(before - g18.cookies - cost2) / cost2 < 1e-9, 'Preis steigt ×1,12');
 assert.equal(g18.itemCount('choco'), 2); assert.ok(Math.abs(g18.baseCps / base18 - 1.30) < 1e-9, '2× = +30 %');
-assert.equal(g18.buyItem('icetea'), 0, 'zu teuer'); g18.cookies = 1e30; assert.equal(g18.buyItem('icetea', 3), 3); assert.equal(g18.itemCount('icetea'), 3);
+assert.equal(g18.buyItem('icetea'), 0, 'zu teuer'); g18.cookies = 1e50; assert.equal(g18.buyItem('icetea', 3), 3); assert.equal(g18.itemCount('icetea'), 3);
 assert.ok(Math.abs(g18.baseCps / base18 - (1 + 0.30 + 30)) < 1e-9, '3× Eistee = +3000 %');
-const mx = new Game(); mx.cookies = 1e9; const nmax = mx.buyItem('choco', 'max'); assert.ok(nmax > 20 && mx.cookies >= 0 && mx.buyItem('choco', 1) <= 1);
-const clk = new Game(); const c0 = clk.clickValue; clk.cookies = 1e6; clk.buyItem('choco'); assert.ok(Math.abs(clk.clickValue / c0 - 1.15) < 1e-9, 'Klick +15 %');
+const mx = new Game(); mx.cookies = 1e18; const nmax = mx.buyItem('choco', 'max'); assert.ok(nmax > 20 && mx.cookies >= 0 && mx.buyItem('choco', 1) <= 1);
+const clk = new Game(); const c0 = clk.clickValue; clk.cookies = 1e15; clk.buyItem('choco'); assert.ok(Math.abs(clk.clickValue / c0 - 1.15) < 1e-9, 'Klick +15 %');
 g18.total = 8e12; g18.cookies = 0; g18.ascend(); assert.deepEqual(g18.items, { choco: 2, icetea: 3 }, 'Items bleiben beim Aufstieg');
 const g19 = new Game(); g19.load(JSON.parse(JSON.stringify(g18.serialize()))); assert.deepEqual(g19.items, { choco: 2, icetea: 3 }); assert.ok(g19.unlockedSkins().includes('icetea'));
 const old = new Game(); old.load({ v: 2, items: ['choco', 'milk', 'nope'] }); assert.deepEqual(old.items, { choco: 1, milk: 1 }, 'alte Spielstände');
 g19.hardReset(); assert.deepEqual(g19.items, {});
+// Preise ×1e9
+const pc = new Game(); pc.cookies = 99999999999999; assert.equal(pc.buyItem('choco'), 0, 'Schoko-Keks kostet jetzt 1e14'); pc.cookies = 1e14; assert.equal(pc.buyItem('choco'), 1);
+// Sound-Shop
+const sg = new Game(); assert.deepEqual(sg.sounds, { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' });
+assert.equal(sg.buySound('retro'), false, 'zu teuer'); sg.cookies = 5e7; assert.ok(sg.buySound('retro')); assert.equal(sg.buySound('retro'), false, 'nur einmal'); assert.equal(sg.cookies, 4e7);
+assert.equal(sg.selectSound('zen'), false, 'nicht gekauft'); assert.ok(sg.selectSound('retro')); assert.equal(sg.sounds.pack, 'retro');
+sg.cookies = 1e9; assert.ok(sg.buySound('lofi')); assert.ok(sg.selectSound('lofi')); assert.equal(sg.sounds.track, 'lofi');
+sg.total = 8e12; sg.ascend(); assert.equal(sg.sounds.pack, 'retro', 'bleibt beim Aufstieg');
+const sg2 = new Game(); sg2.load(JSON.parse(JSON.stringify(sg.serialize()))); assert.deepEqual(sg2.sounds, sg.sounds);
+const sg3 = new Game(); sg3.load({ v: 2, sounds: { owned: ['zen', 'unsinn'], pack: 'epic', track: 'calm' } }); assert.equal(sg3.sounds.pack, 'classic', 'nicht besessen -> klassisch'); assert.ok(sg3.sounds.owned.includes('zen') && !sg3.sounds.owned.includes('unsinn'));
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));

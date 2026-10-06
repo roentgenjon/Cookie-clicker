@@ -139,6 +139,8 @@ export function fmtShort(n) {
   const e = Math.floor(Math.log10(n) / 3);
   if (e >= sfx.length) return n.toExponential(2).replace('+', '');
   const v = n / Math.pow(10, e * 3);
-  const txt = (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0)).replace(/\.?0+$/, '').replace('.', ',');
+  let txt = v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0);
+  if (txt.includes('.')) txt = txt.replace(/0+$/, '').replace(/\.$/, ''); // Nachkomma-Nullen entfernen, aber nie bei ganzen Zahlen
+  txt = txt.replace('.', ',');
   return `${txt} ${sfx[e]}`;
 }
