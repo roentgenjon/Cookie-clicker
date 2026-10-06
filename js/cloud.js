@@ -34,15 +34,23 @@ export const cloud = {
   get name() { return ls.get('cc_name') || ''; },
   get loggedIn() { return !!(this.enabled && this.id && this.secret); },
 
-  // Anmelden oder (falls der Name neu ist) registrieren.
-  async login(name, password) {
+  // mode: 'auto' (anmelden oder registrieren), 'login' (nur bestehendes Konto), 'register' (nur neues Konto)
+  async login(name, password, mode = 'auto') {
     name = name.trim();
     if (name.length < 2 || name.length > 16) throw new Error('Name: 2–16 Zeichen');
     if (password.length < 4) throw new Error('Passwort: mindestens 4 Zeichen');
     const { id, secret } = await derive(name, password);
-    let result;
+    let result = null;
     try { result = { isNew: false, data: (await post('/api/load', 'POST', { id, secret })).data }; }
-    catch (e) { if (e.status === 404) result = { isNew: true }; else throw e; }
+    catch (e) {
+      if (e.status === 404) {
+        if (mode === 'login') throw new Error('Kein Konto mit diesem Namen gefunden. Tippe auf „Konto erstellen“, um ein neues anzulegen.');
+        result = { isNew: true };
+      } else if (e.status === 403 && !(e.data && e.data.banned)) {
+        throw new Error(mode === 'register' ? 'Dieser Name ist schon vergeben (Groß-/Kleinschreibung zählt nicht). Bitte wähle einen anderen Namen.' : 'Falsches Passwort für dieses Konto.');
+      } else throw e;
+    }
+    if (result && !result.isNew && mode === 'register') throw new Error('Dieser Name ist schon vergeben (Groß-/Kleinschreibung zählt nicht). Bitte wähle einen anderen Namen.');
     ls.set('cc_id', id); ls.set('cc_secret', secret); ls.set('cc_name', name);
     return result;
   },
