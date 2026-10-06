@@ -72,4 +72,13 @@ assert.equal(g15.streak, 1); assert.equal(g15.gcs.length, 3, 'Bonus: 3 goldene K
 const sv = JSON.parse(JSON.stringify(g15.serialize())); const g16 = new Game(); g16.load(sv); assert.equal(g16.daily.claimed.length, 3); assert.equal(g16.streak, 1);
 assert.ok(g16.unlockedSkins().includes('classic')); assert.equal(g16.setSkin('gold'), false); g16.golden = 12; assert.ok(g16.setSkin('fortune')); assert.equal(g16.skin, 'fortune');
 const g17 = new Game(); g17.click(); g17.buyBuilding(0, 1); assert.equal(g17.daily.prog.clicks, 1);
+// Item-Shop
+const g18 = new Game(); g18.owned[1] = 10; g18.recalc(); const base18 = g18.baseCps; g18.cookies = 1e6;
+assert.equal(g18.buyItem('choco'), true); assert.ok(Math.abs(g18.baseCps / base18 - 1.15) < 1e-9, '+15 %'); assert.equal(g18.buyItem('choco'), false, 'nur einmal');
+assert.equal(g18.buyItem('icetea'), false, 'zu teuer'); g18.cookies = 1e30; assert.ok(g18.buyItem('icetea'));
+assert.ok(Math.abs(g18.baseCps / base18 - (1 + 0.15 + 10)) < 1e-9, 'Eistee +1000 %');
+const clk = new Game(); const c0 = clk.clickValue; clk.cookies = 1e6; clk.buyItem('choco'); assert.ok(Math.abs(clk.clickValue / c0 - 1.15) < 1e-9, 'Klick +15 %');
+g18.total = 8e12; g18.cookies = 0; g18.ascend(); assert.deepEqual(g18.items, ['choco', 'icetea'], 'Items bleiben beim Aufstieg');
+const g19 = new Game(); g19.load(JSON.parse(JSON.stringify(g18.serialize()))); assert.deepEqual(g19.items, ['choco', 'icetea']); assert.ok(g19.unlockedSkins().includes('icetea'));
+g19.hardReset(); assert.deepEqual(g19.items, []);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));

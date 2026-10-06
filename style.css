@@ -137,3 +137,11 @@ textarea#msg{min-height:84px;resize:vertical}
 .lb-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.lb-tabs .on{background:var(--accent);color:#000;border-color:var(--accent)}
 .lb tr.me td{background:#f4a25933;font-weight:600}
 .adm-sched{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--bg);font-size:13px}
+
+.item-bar{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;font-size:22px;min-height:4px}
+.items{display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+.item .ie{font-size:34px;text-align:center}.item .ip{color:var(--good);font-weight:600}
+.item.has{opacity:.6}.item.best{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset,0 0 18px #ffd16655}
+.tag{background:var(--gold);color:#000;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+.shop-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}

@@ -1,5 +1,5 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
-import { SKINS, TASK_INFO } from './extras.js';
+import { SKINS, TASK_INFO, ITEMS } from './extras.js';
 import { cloud } from './cloud.js';
 import { parseNum } from './admin.js';
 
@@ -55,4 +55,21 @@ export async function renderGift(body, { game, fmt, toast, title, save }) {
     } catch (err) { msg('❌ ' + err.message); }
     body.querySelector('#gGo').disabled = false;
   });
+}
+
+export function renderItems(body, { game, fmt, toast, title, changed, buySound }) {
+  title('🛒 Item-Shop');
+  const owned = new Set(game.items);
+  const pctTotal = Math.round((game.itemMult - 1) * 100);
+  body.innerHTML = `<div class="stack">
+    <div class="shop-top"><div><b>Dein Bonus: +${pctTotal.toLocaleString('de-DE')} %</b><div class="note">auf Kekse pro Sekunde und Klickertrag · ${owned.size} / ${ITEMS.length} Items</div></div><div class="note">Du hast ${fmt(game.cookies)} 🍪</div></div>
+    <p class="note">Jedes Item kaufst du einmal für Kekse. Der Bonus gilt für immer und <b>bleibt beim Aufstieg erhalten</b>.</p>
+    <div class="items">${ITEMS.map((it) => {
+      const has = owned.has(it.id); const can = !has && game.cookies >= it.cost;
+      return `<div class="item ${has ? 'has' : ''} ${it.best ? 'best' : ''}"><div class="ie">${it.emoji}</div><div class="in"><b>${it.name}</b>${it.best ? ' <span class="tag">BESTES ITEM</span>' : ''}<div class="ip">+${it.pct.toLocaleString('de-DE')} % Kekse</div></div><button data-item="${it.id}" ${can ? '' : 'disabled'}>${has ? '✔ Besitzt' : `🍪 ${fmt(it.cost)}`}</button></div>`;
+    }).join('')}</div></div>`;
+  body.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
+    const it = ITEMS.find((x) => x.id === b.dataset.item);
+    if (game.buyItem(it.id)) { buySound(); toast(`🛒 <b>${it.emoji} ${it.name}</b> gekauft: +${it.pct.toLocaleString('de-DE')} % Kekse!`); changed(); renderItems(body, { game, fmt, toast, title, changed, buySound }); }
+  }));
 }
