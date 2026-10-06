@@ -43,7 +43,8 @@ async function authenticate(env, b, { allowNew = false } = {}) {
   if (!rec) return allowNew ? { rec: null, hash: await sha256(b.secret) } : { err: fail(env, 'Kein Spielstand gefunden', 404) };
   const hash = await sha256(b.secret);
   if (rec.h !== hash) { await addFail(env, b.id); return { err: fail(env, 'Falsches Passwort (oder Name schon vergeben)', 403) }; }
-  if (await env.SAVES.get('ban:' + b.id)) return { err: fail(env, 'Dein Konto wurde gesperrt.', 403, { banned: true }) };
+  const ban = await env.SAVES.get('ban:' + b.id);
+  if (ban) return { err: fail(env, 'Dein Konto wurde gesperrt.', 403, { banned: true, reason: ban === '1' ? '' : String(ban).slice(0, 300) }) };
   return { rec, hash };
 }
 
@@ -194,7 +195,8 @@ async function admin(env, b) {
     case 'ban': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gesperrt werden', 403);
-      if (b.banned) await env.SAVES.put('ban:' + target, '1'); else await env.SAVES.delete('ban:' + target);
+      const reason = typeof b.reason === 'string' ? b.reason.trim().slice(0, 300) : '';
+      if (b.banned) await env.SAVES.put('ban:' + target, reason || '1'); else await env.SAVES.delete('ban:' + target);
       return json(env, { ok: true });
     }
     case 'delete': {
