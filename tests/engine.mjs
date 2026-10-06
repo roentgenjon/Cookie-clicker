@@ -122,15 +122,15 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 {
   const a = B('5e500'), b = B('3e500');
   assert.equal(a.add(b).toString(), B('8e500').toString()); assert.ok(a.sub(b).toString().startsWith('2.0000000000000') && a.sub(b).e === 500);
-  assert.equal(B('1e999').mulN(20).clamp().toString(), B('9.99e999').toString(), 'Obergrenze 9,99e999');
+  assert.equal(B('1e99999999999').mulN(20).clamp().toString(), B('9.99e99999999999').toString(), 'Obergrenze 9,99e99999999999');
   assert.equal(fmtBig(B('1.234e500')), '1,23e500'); assert.equal(fmtBig(B(1500000)), '1,5 Mio'); assert.equal(fmtBig(B(15)), '15');
   assert.ok(B('1e400').gt(B('9e399')) && B('1e400').lt(B('1e401')) && B(0).lt(B(1)));
   // Spiel mit riesigen Multiplikatoren: endlich, nie NaN, bleibt unter der Grenze
-  const g = new Game(); g.globalLog = 900; g.clickLog = 900; g.tierLog.fill(900); g.owned.fill(1e6); g.updateCps();
+  const g = new Game(); g.globalLog = 2e11; g.clickLog = 2e11; g.tierLog.fill(2e11); g.owned.fill(1e6); g.updateCps();
   for (let i = 0; i < 5; i++) g.earn(g.cps.mulN(1e6));
   g.click();
-  for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) assert.ok(Number.isFinite(v.log10()) && v.e <= 1e4, 'endlich: ' + v);
-  assert.equal(g.cookies.toString(), B('9.99e999').toString(), 'Kekse stoppen bei 9,99e999');
+  for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) assert.ok(Number.isFinite(v.log10()) && v.e <= 99999999999, 'endlich: ' + v);
+  assert.equal(g.cookies.toString(), B('9.99e99999999999').toString(), 'Kekse stoppen bei 9,99e99999999999'); assert.equal(fmtBig(g.cookies), '9,99e99999999999');
   const g2 = new Game(); g2.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(g2.cookies.toString(), g.cookies.toString(), 'Speichern/Laden über 1e308');
   // Preise und Kauf jenseits von 1e308
   const h = new Game(); h.owned[5] = 8000; h.cookies = B('1e600'); h.total = B('1e600'); h.recalc();
@@ -141,7 +141,8 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(Number.isFinite(m.baseCps.log10()));
   const i2 = new Game(); i2.cookies = B('1e900'); assert.ok(i2.buyItem('icetea', 'max') > 100, 'Items');
   i2.cookies = B('1e900'); i2.applyEvent({ type: 'cookies', amount: '-5e899' }); assert.ok(i2.cookies.e === 899 || i2.cookies.e === 900);
-  i2.applyEvent({ type: 'cookies', amount: '4e999' }); assert.ok(i2.cookies.e === 999);
+  i2.applyEvent({ type: 'cookies', amount: '4e99999999999' }); assert.ok(i2.cookies.e === 99999999999);
+  const w = new Game(); w.cookies = B('1e5000'); w.total = B('1e5000'); w.owned[3] = 10; w.recalc(); assert.ok(w.buyBuilding(3, 1) && w.cookies.e === 5000, 'Rechnen mit 1e5000');
   const old = new Game(); old.load({ v: 2, cookies: 123456, total: 1e20 }); assert.equal(N(old.cookies), 123456, 'alte Spielstände (Zahl)');
   console.log('Große-Zahlen-Test OK');
 }

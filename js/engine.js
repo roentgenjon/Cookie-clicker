@@ -4,7 +4,7 @@ import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemM
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
-// Kekse, Produktion und Preise sind Big-Zahlen (bis 9,99e999). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
+// Kekse, Produktion und Preise sind Big-Zahlen (bis 9,99e99999999999). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
 const CHIP_CAP = 1e300; // Himmelschips bleiben normale Zahlen
 const LG = { tierBig: Math.log10(EFFECT.tierBig), tierSmall: Math.log10(EFFECT.tierSmall), click: Math.log10(EFFECT.click), global: Math.log10(EFFECT.global), hGlobal: Math.log10(EFFECT.hGlobal), hClick: Math.log10(EFFECT.hClick) };
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
@@ -147,7 +147,7 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    this.baseCps = sum.mulLog(this.globalLog).mulN((1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * this.itemMult);
+    this.baseCps = sum.mulLog(this.globalLog).mulN((1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * this.itemMult).clamp();
   }
   get itemMult() { return itemMultiplier(this.items); }
   // ---- Sound-Shop ----
@@ -173,8 +173,8 @@ export class Game {
     return n;
   }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
-  get cps() { return this.baseCps.mulN(this.buffMult('frenzy')); }
-  get clickValue() { return Big.fromLog(this.clickLog).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click') * this.itemMult); }
+  get cps() { return this.baseCps.mulN(this.buffMult('frenzy')).clamp(); }
+  get clickValue() { return Big.fromLog(this.clickLog).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click') * this.itemMult).clamp(); }
 
   // ---- Gebäude ----
   buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount); }

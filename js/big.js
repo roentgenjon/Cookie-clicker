@@ -1,7 +1,7 @@
-// Große Zahlen bis 9,99e999: Mantisse (1 ≤ m < 10) und ganzzahliger Exponent. Unveränderlich (jede Operation liefert ein neues Big).
+// Große Zahlen bis 9,99e99999999999: Mantisse (1 ≤ m < 10) und ganzzahliger Exponent. Unveränderlich (jede Operation liefert ein neues Big).
 // Normale JS-Zahlen enden bei ~1,8e308 – Big rechnet darüber hinaus.
 const LN10 = Math.LN10;
-export const CAP_E = 999; export const CAP_M = 9.99; // Obergrenze des Spiels: 9,99e999
+export const CAP_E = 99999999999; export const CAP_M = 9.99; // Obergrenze des Spiels: 9,99e99999999999
 
 export class Big {
   constructor(m, e) { this.m = m; this.e = e; }
@@ -59,7 +59,7 @@ export class Big {
   min(o) { o = Big.from(o); return this.cmp(o) <= 0 ? this : o; }
   max(o) { o = Big.from(o); return this.cmp(o) >= 0 ? this : o; }
   floor() { return this.e >= 15 ? this : Big.from(Math.floor(this.toNumber())); }
-  // Spielobergrenze 9,99e999
+  // Spielobergrenze 9,99e99999999999
   clamp() { return this.e > CAP_E || (this.e === CAP_E && this.m > CAP_M) ? CAP : this; }
   toString() { return this.m === 0 ? '0' : `${this.m.toPrecision(15)}e${this.e}`; }
   toJSON() { return this.toString(); }
@@ -94,7 +94,7 @@ const SFX = ['', 'K', 'Mio', 'Mrd', 'Bio', 'Brd', 'Trl', 'Trd', 'Qa', 'Qi', 'Sx'
 export function fmtBig(x) {
   const b = Big.from(x);
   if (b.m === 0) return '0';
-  if (b.e > 1e6) return '∞';
+  if (b.e > 1e12) return '∞';
   if (b.e < 6) { const n = Number(b.toNumber().toPrecision(12)); return (n < 100 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString('de-DE')).replace(/\.0$/, ''); }
   const k = Math.floor(b.e / 3);
   if (k >= SFX.length) return `${b.m.toFixed(2).replace('.', ',')}e${b.e}`;

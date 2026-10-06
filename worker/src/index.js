@@ -48,15 +48,15 @@ async function authenticate(env, b, { allowNew = false } = {}) {
 }
 
 // ---- erlaubte Ereignisse (für Admin → Spieler) ----
-// log10 einer Zahl oder eines Textes wie "1.5e+500" (NaN bei Ungültigem); das Spiel reicht bis 9,99e999
+// log10 einer Zahl oder eines Textes wie "1.5e+500" (NaN bei Ungültigem); das Spiel reicht bis 9,99e99999999999
 const logOf = (v) => { if (typeof v === 'number') return v > 0 ? Math.log10(v) : NaN; const t = /^\s*(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(String(v)); return t && Number(t[1]) > 0 ? Math.log10(Number(t[1])) + (t[2] ? Number(t[2]) : 0) : NaN; };
 const num = (v, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null; };
 function cleanEvent(e) {
   if (!e || typeof e !== 'object') return null;
   switch (e.type) {
     case 'golden': { const count = num(e.count, 1, 30); return ['random', 'frenzy', 'lucky', 'click', 'jackpot'].includes(e.effect) && count ? { type: 'golden', effect: e.effect, count: Math.floor(count) } : null; }
-    case 'cookies': { // Menge als Zahl oder als Text wie "-1.5e+500" (Spiel reicht bis 9,99e999)
-      if (typeof e.amount === 'string') { const t = /^\s*(-?)(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(e.amount); if (!t) return null; const ex = t[3] ? Number(t[3]) : 0; if (!(Number(t[2]) > 0) || ex > 999 || ex < -5) return null; return { type: 'cookies', amount: `${t[1]}${t[2]}e${ex}` }; }
+    case 'cookies': { // Menge als Zahl oder als Text wie "-1.5e+500" (Spiel reicht bis 9,99e99999999999)
+      if (typeof e.amount === 'string') { const t = /^\s*(-?)(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(e.amount); if (!t) return null; const ex = t[3] ? Number(t[3]) : 0; if (!(Number(t[2]) > 0) || ex > 99999999999 || ex < -5) return null; return { type: 'cookies', amount: `${t[1]}${t[2]}e${ex}` }; }
       const amount = num(e.amount, -1e300, 1e300); return amount === null ? null : { type: 'cookies', amount };
     }
     case 'chips': { const amount = num(e.amount, 1, 1e9); return amount ? { type: 'chips', amount: Math.floor(amount) } : null; }
@@ -293,7 +293,7 @@ export default {
         if (!target.value) return fail(env, 'Spieler nicht gefunden', 404);
         if (await env.SAVES.get('ban:' + toId)) return fail(env, 'Dieser Spieler kann nichts empfangen.');
         const aLog = logOf(b.amount);
-        if (!Number.isFinite(aLog) || aLog < 0 || aLog > 999.99) return fail(env, 'Ungültiger Betrag');
+        if (!Number.isFinite(aLog) || aLog < 0 || aLog > 100000000000.99) return fail(env, 'Ungültiger Betrag');
         const sLog = logOf((au.rec.data || {}).cookies);
         if (!Number.isFinite(sLog) || aLog > sLog + Math.log10(0.5) + 1e-9) return fail(env, 'Du kannst höchstens die Hälfte deiner Kekse verschenken.');
         const key = `gift:${b.id}:${today()}`; const used = Number(await env.SAVES.get(key)) || 0;
@@ -321,7 +321,7 @@ export default {
         const score = Number(b.score);
         const s = Number.isFinite(score) && score > 0 ? score : 0;
         const st = b.stats || {}; const c = Number(st.cps), asc = Number(st.asc);
-        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, sl: Number.isFinite(Number(st.sl)) ? Math.min(1100, Math.max(0, Number(st.sl))) : undefined, cl: Number.isFinite(Number(st.cl)) ? Math.min(1100, Math.max(0, Number(st.cl))) : undefined, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
+        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, sl: Number.isFinite(Number(st.sl)) ? Math.min(100000000100, Math.max(0, Number(st.sl))) : undefined, cl: Number.isFinite(Number(st.cl)) ? Math.min(100000000100, Math.max(0, Number(st.cl))) : undefined, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
         return json(env, { ok: true });
       }
 
