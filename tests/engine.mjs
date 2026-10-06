@@ -109,4 +109,9 @@ import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
   const huge = new Game(); huge.owned[0] = 600; huge.cookies = 1e300; huge.recalc(); const got = huge.buySeries(5, 'max'); assert.ok(got > 1000 && Number.isFinite(huge.cps), `riesige Stufenzahl: ${got}`);
   const bad = new Game(); bad.load({ v: 2, series: ['x', -5, 1e30, 3] }); assert.deepEqual(bad.series.slice(0, 4), [0, 0, SERIES_LEVELS, 3]);
 });
+// „Alle kaufen“ mit Mega-Reihen
+const ba = new Game(); ba.owned.fill(100); ba.recalc(); ba.total = 1e15; ba.cookies = 1e12; const baBefore = ba.cps;
+const baN = ba.buyAllSeries(); assert.ok(baN > 100, `Mega-Stufen gekauft: ${baN}`); assert.ok(ba.cps > baBefore); assert.ok(ba.cookies >= 0 && ba.cookies < 1e12 * 0.5, 'Großteil des Guthabens ausgegeben');
+assert.ok(ba.series.filter((n) => n > 0).length > 20, 'verteilt auf viele Reihen');
+const bb = new Game(); bb.cookies = 5; assert.equal(bb.buyAllSeries(), 0);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));
