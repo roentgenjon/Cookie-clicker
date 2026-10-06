@@ -151,3 +151,6 @@ textarea#msg{min-height:84px;resize:vertical}
 .item .have{color:var(--mute);font-size:13px;margin-top:2px}.item .have b{color:var(--text)}
 .item.has{opacity:1}
 .sbtns{display:flex;flex-direction:column;gap:6px}.sbtns button{white-space:nowrap}
+
+.chat-wrap{position:relative}
+.chat-new{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--accent);color:#000;border-color:var(--accent);font-weight:700;box-shadow:0 4px 14px #0008;z-index:2}
