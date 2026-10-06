@@ -14,7 +14,7 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = fmtBig; // Zahlen und Big-Werte (bis 9,99e999)
 const fmtTime = (s) => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `${d ? d + 'd ' : ''}${h ? h + 'h ' : ''}${m}m ${s % 60}s`; };
-const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
+const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } }, del: (k) => { try { localStorage.removeItem(k); } catch { /* ignore */ } } };
 
 const game = new Game();
 window.__game = game; // Zugriff für Tests/Debugging
@@ -317,7 +317,7 @@ async function renderCloud() {
         if (r.isNew) { game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
         else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
         $('#bakeryName').textContent = game.name; updateCloudBtn(); checkAdmin(); startEvents(); modal.close();
-      } catch (err) { msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
+      } catch (err) { if (err.data && err.data.banned) { showBanScreen(); return; } msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
     });
   } else {
     body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.</p>
@@ -325,7 +325,7 @@ async function renderCloud() {
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></div>`;
     $('#cSave').addEventListener('click', async () => { try { await cloudSave(); msg('Gespeichert ✔'); loadLb(); } catch (e) { msg('❌ ' + e.message); } });
     $('#cLoad').addEventListener('click', async () => { try { const r = await cloud.load(); game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); msg('Geladen ✔'); } catch (e) { msg('❌ ' + e.message); } });
-    $('#cOut').addEventListener('click', async () => { try { await cloudSave(); } catch { /* egal */ } cloud.logout(); updateCloudBtn(); checkAdmin(); renderCloud(); });
+    $('#cOut').addEventListener('click', async () => { if (banned) return; try { await cloudSave(); } catch { /* egal */ } cloud.logout(); updateCloudBtn(); checkAdmin(); renderCloud(); });
   }
   loadLb();
 }
@@ -348,7 +348,18 @@ function cloudSave(keepalive = false, setup) {
   return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
 let banned = false; let lastHideSave = 0; let limitUntil = 0;
-function onBanned() { if (banned) return; banned = true; toast('🚫 Dein Konto wurde gesperrt. Dein Fortschritt wird nicht mehr gespeichert.'); }
+// Bann: schwarzer Bildschirm über allem (auch über offenen Fenstern), keine Bedienung, kein Abmelden. Das Merkmal bleibt nach Neuladen erhalten und wird beim Start geprüft.
+function showBanScreen() {
+  banned = true; try { if (modal.open) modal.close(); } catch { /* egal */ }
+  const el = $('#banScreen'); try { el.hidePopover(); } catch { /* egal */ } try { el.showPopover(); } catch { el.style.display = 'flex'; }
+  document.title = 'Gebannt';
+}
+function onBanned() { if (banned) return; if (cloud.loggedIn) ls.set('cc_banned', '1'); showBanScreen(); }
+['keydown', 'keyup', 'pointerdown', 'click', 'contextmenu'].forEach((t) => document.addEventListener(t, (e) => { if (banned) { e.preventDefault(); e.stopImmediatePropagation(); } }, true));
+if (ls.get('cc_banned') === '1') {
+  if (cloud.loggedIn) { showBanScreen(); cloud.events(0).then(() => { ls.del('cc_banned'); location.reload(); }).catch((e) => { if (e.status === 404 || (e.status === 403 && !(e.data && e.data.banned))) { ls.del('cc_banned'); location.reload(); } }); }
+  else ls.del('cc_banned');
+}
 
 // ---------- Eingeblendete Admin-Nachrichten (bleiben, bis man sie schließt) ----------
 function showMessage(from, text) {
