@@ -21,7 +21,7 @@ Spielstände speichern die Käufe lauflängenkodiert.
 - 🔊 Sound und 🌧️ Keks-Regen (in den Optionen abschaltbar)
 - 🏆 Rangliste nach Gesamt-Keksen, Kekse pro Sekunde und Aufstiegen, mit eigenem Platz
 - 📅 Tägliche Aufgaben mit Serie und Tagesbonus
-- 🛒 Item-Shop: 11 Items mit +15 % bis +1000 % (Eistee-Flasche), bleiben beim Aufstieg
+- 🛒 Item-Shop: 11 Items (+15 % bis +1000 % je Stück, Eistee-Flasche), beliebig oft kaufbar (Preis +12 % je Stück), bleiben beim Aufstieg
 - 🎨 14 freischaltbare Keks-Skins
 - 🎁 Geschenke zwischen Spielern (max. 50 % des Vorrats, 5 pro Tag)
 - 🛡️ Admin-Panel: Sterne spawnen, Boosts, Geben, Upgrades, Nachrichten, Zeitplan, Admins ernennen, sperren/stumm/zurücksetzen/löschen
