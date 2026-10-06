@@ -5,7 +5,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 const time = (t) => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-export function createChat({ toast, isAdmin, onUnread }) {
+export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
+  let primedG = false; let primedC = false;
   let msgs = []; // allgemeiner Chat
   const dmMsgs = {}; // id des anderen Spielers -> Nachrichten
   let convs = []; // private Chats: { id, name, last, lastFrom, lastText }
@@ -84,13 +85,27 @@ export function createChat({ toast, isAdmin, onUnread }) {
     try {
       const r = await cloud.chat();
       const changed = JSON.stringify(r.messages.map((m) => m.i)) !== JSON.stringify(msgs.map((m) => m.i));
+      if (primedG) {
+        const top = msgs.length ? msgs[msgs.length - 1].i : 0;
+        const fresh = r.messages.filter((m) => m.i > top && !mineGlobal(m));
+        if (fresh.length && !(open && active === 'global')) { const m = fresh[fresh.length - 1]; onNotify({ title: '🌍 ' + m.n, text: m.x, more: fresh.length - 1 }); }
+      }
+      primedG = true;
       msgs = r.messages;
       if (open && active === 'global') { if (changed) paintList(); markSeen(); } else { refreshBadge(); paintSide(); }
     } catch { /* offline: später wieder */ }
   }
   async function pollConvs() {
     if (!cloud.loggedIn) { convs = []; return; }
-    try { convs = (await cloud.dmList()).convs; refreshBadge(); if (open) { paintSide(); paintHeader(); } } catch { /* ignore */ }
+    try {
+      const nc = (await cloud.dmList()).convs;
+      if (primedC) {
+        for (const c of nc) {
+          const old = convs.find((x) => x.id === c.id);
+          if (c.last && c.lastFrom && c.lastFrom !== myId() && c.last > (old ? old.last || 0 : 0) && c.last > (dmSeen[c.id] || 0) && !(open && active === c.id)) onNotify({ title: '💬 ' + c.name, text: c.lastText || 'Neue Nachricht', id: c.id });
+        }
+      }
+      primedC = true; convs = nc; refreshBadge(); if (open) { paintSide(); paintHeader(); } } catch { /* ignore */ }
   }
   async function pollActive() {
     if (!open || active === 'global' || !cloud.loggedIn) return;
@@ -137,7 +152,7 @@ export function createChat({ toast, isAdmin, onUnread }) {
   }
 
   return {
-    start() { pollGlobal(); pollConvs(); timers.push(setInterval(() => { if (!open) { pollGlobal(); pollConvs(); } }, 30000)); },
+    start() { pollGlobal(); pollConvs(); timers.push(setInterval(() => { if (!open) { pollGlobal(); pollConvs(); } }, 15000)); },
     render(el, setTitle) {
       setTitle('💬 Chat'); body = el; open = true;
       el.closest('dialog')?.classList.add('wide');
@@ -167,6 +182,6 @@ export function createChat({ toast, isAdmin, onUnread }) {
         try { await cloud.admin('chatDel', { mid: Number(b.dataset.mid) }); msgs = msgs.filter((m) => String(m.i) !== b.dataset.mid); paintList(); } catch (err) { toast(`❌ ${esc(err.message)}`); }
       });
     },
-    close() { open = false; body = null; timers.forEach(clearInterval); timers = [setInterval(() => { pollGlobal(); pollConvs(); }, 30000)]; },
+    close() { open = false; body = null; timers.forEach(clearInterval); timers = [setInterval(() => { pollGlobal(); pollConvs(); }, 15000)]; },
   };
 }
