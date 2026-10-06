@@ -1,4 +1,4 @@
-// Gemeinsamer Chat: Nachrichten kommen vom Worker (letzte 50), Abruf per Polling.
+// Chat: allgemeiner Chat für alle + private 1:1-Chats (Seitenleiste). Abruf per Polling.
 import { cloud } from './cloud.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -6,83 +6,167 @@ const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { retur
 const time = (t) => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
 export function createChat({ toast, isAdmin, onUnread }) {
-  let msgs = []; let open = false; let body = null; let timer = null; let seen = Number(ls.get('cc_chat_seen')) || 0; let busy = false;
-  const mine = (m) => cloud.loggedIn && m.n === cloud.name;
-  const unread = () => msgs.filter((m) => m.i > seen && !mine(m)).length;
+  let msgs = []; // allgemeiner Chat
+  const dmMsgs = {}; // id des anderen Spielers -> Nachrichten
+  let convs = []; // private Chats: { id, name, last, lastFrom, lastText }
+  let active = 'global';
+  let open = false; let body = null; let timers = [];
+  let seen = Number(ls.get('cc_chat_seen')) || 0;
+  let dmSeen = {}; try { dmSeen = JSON.parse(ls.get('cc_dm_seen') || '{}'); } catch { dmSeen = {}; }
+  let busy = false; let picking = false;
 
-  function markSeen() { if (msgs.length) { seen = Math.max(seen, msgs[msgs.length - 1].i); ls.set('cc_chat_seen', String(seen)); } onUnread(0); }
+  const myId = () => cloud.id;
+  const mineGlobal = (m) => cloud.loggedIn && m.n === cloud.name;
+  const globalUnread = () => msgs.filter((m) => m.i > seen && !mineGlobal(m)).length;
+  const convUnread = (c) => !!c.last && c.lastFrom && c.lastFrom !== myId() && c.last > (dmSeen[c.id] || 0);
+  const totalUnread = () => globalUnread() + convs.filter(convUnread).length;
+  const refreshBadge = () => onUnread(totalUnread());
 
-  // Eine Nachricht als Element (nur neue werden angehängt, vorhandene bleiben unverändert -> Scrollposition bleibt)
+  function markSeen() {
+    if (active === 'global') { if (msgs.length) { seen = Math.max(seen, msgs[msgs.length - 1].i); ls.set('cc_chat_seen', String(seen)); } }
+    else { const c = convs.find((x) => x.id === active); const l = dmMsgs[active] || []; const t = Math.max(c ? c.last || 0 : 0, l.length ? l[l.length - 1].t : 0); dmSeen[active] = t; ls.set('cc_dm_seen', JSON.stringify(dmSeen)); }
+    refreshBadge(); paintSide();
+  }
+
+  // ---------- Nachrichtenliste (nur neue Nachrichten anhängen, Scrollposition bleibt) ----------
+  const nearBottom = (list) => list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  const toBottom = (list) => { list.scrollTop = list.scrollHeight; setTimeout(() => { list.scrollTop = list.scrollHeight; }, 60); };
   function msgEl(m) {
-    const el = document.createElement('div'); el.className = 'cm' + (mine(m) ? ' me' : ''); el.dataset.mid = m.i;
-    el.innerHTML = `<div class="cm-h"><b class="${m.a ? 'adm' : ''}">${m.a ? '🛡️ ' : ''}${esc(m.n)}</b><span>${time(m.t)}</span>${isAdmin() ? `<button class="cm-del" data-mid="${m.i}" title="Nachricht löschen">🗑️</button>` : ''}</div><div class="cm-t">${esc(m.x)}</div>`;
+    const el = document.createElement('div'); const g = active === 'global';
+    const mine = g ? mineGlobal(m) : m.f === myId();
+    el.className = 'cm' + (mine ? ' me' : ''); el.dataset.mid = m.i;
+    const who = g ? `<b class="${m.a ? 'adm' : ''}">${m.a ? '🛡️ ' : ''}${esc(m.n)}</b>` : `<b>${mine ? 'Du' : esc((convs.find((c) => c.id === active) || {}).name || '?')}</b>`;
+    el.innerHTML = `<div class="cm-h">${who}<span>${time(m.t)}</span>${g && isAdmin() ? `<button class="cm-del" data-mid="${m.i}" title="Nachricht löschen">🗑️</button>` : ''}</div><div class="cm-t">${esc(m.x)}</div>`;
     return el;
   }
-  const nearBottom = (list) => list.scrollHeight - list.scrollTop - list.clientHeight < 60;
-  const toBottom = (list) => { list.scrollTop = list.scrollHeight; setTimeout(() => { list.scrollTop = list.scrollHeight; }, 60); }; // 2. Mal: nach dem Layout (iPad)
-  function updatePill(list) { const pill = body && body.querySelector('#chatNew'); if (pill && nearBottom(list)) pill.classList.add('hidden'); }
-
-  // force = true: immer nach unten (eigene Nachricht, erstes Öffnen)
+  const current = () => (active === 'global' ? msgs : dmMsgs[active] || []);
   function paintList(force = false) {
     if (!body) return;
     const list = body.querySelector('#chatList'); if (!list) return;
+    const list0 = current();
     const wasNear = nearBottom(list) || list.dataset.init !== '1';
     const have = new Map([...list.querySelectorAll('.cm')].map((e) => [e.dataset.mid, e]));
-    const ids = new Set(msgs.map((m) => String(m.i)));
-    for (const [id, e] of have) if (!ids.has(id)) { e.remove(); have.delete(id); } // gelöschte Nachrichten
+    const ids = new Set(list0.map((m) => String(m.i)));
+    for (const [id, e] of have) if (!ids.has(id)) { e.remove(); have.delete(id); }
     list.querySelector('.adm-empty')?.remove();
-    let prev = null; let added = 0; let addedOthers = 0;
-    for (const m of msgs) {
+    let prev = null; let addedOthers = 0;
+    for (const m of list0) {
       let e = have.get(String(m.i));
-      if (!e) { e = msgEl(m); if (prev) prev.after(e); else list.prepend(e); added++; if (!mine(m)) addedOthers++; }
+      if (!e) { e = msgEl(m); if (prev) prev.after(e); else list.prepend(e); if (!(active === 'global' ? mineGlobal(m) : m.f === myId())) addedOthers++; }
       prev = e;
     }
-    if (!msgs.length) list.innerHTML = '<div class="adm-empty">Noch keine Nachrichten. Schreib die erste! 👋</div>';
+    if (!list0.length) list.innerHTML = `<div class="adm-empty">${active === 'global' ? 'Noch keine Nachrichten. Schreib die erste! 👋' : 'Noch keine Nachrichten. Sag Hallo! 👋'}</div>`;
     const pill = body.querySelector('#chatNew');
     if (force || wasNear) { toBottom(list); pill?.classList.add('hidden'); }
     else if (addedOthers && pill) { pill.textContent = `⬇ ${addedOthers} neue Nachricht${addedOthers > 1 ? 'en' : ''}`; pill.classList.remove('hidden'); }
     list.dataset.init = '1';
   }
 
-  async function poll() {
+  // ---------- Seitenleiste ----------
+  function paintSide() {
+    if (!body) return;
+    const side = body.querySelector('#csList'); if (!side) return;
+    const gUn = globalUnread();
+    side.innerHTML = `<button class="cs-item ${active === 'global' ? 'active' : ''}" data-c="global"><span class="cs-ic">🌍</span><span class="cs-n">Allgemein</span>${gUn && active !== 'global' ? `<span class="badge">${gUn > 9 ? '9+' : gUn}</span>` : ''}</button>`
+      + (cloud.loggedIn ? convs.map((c) => `<button class="cs-item ${active === c.id ? 'active' : ''}" data-c="${c.id}"><span class="cs-ic">👤</span><span class="cs-n">${esc(c.name)}${c.lastText ? `<small>${c.lastFrom === myId() ? 'Du: ' : ''}${esc(c.lastText)}</small>` : ''}</span>${convUnread(c) && active !== c.id ? '<span class="dotu"></span>' : ''}</button>`).join('') : '');
+  }
+  function paintHeader() {
+    if (!body) return;
+    const t = body.querySelector('#chatTitle'); if (!t) return;
+    const c = convs.find((x) => x.id === active);
+    t.textContent = active === 'global' ? '🌍 Allgemeiner Chat (für alle)' : `🔒 Privater Chat mit ${c ? c.name : '…'}`;
+    const inp = body.querySelector('#chatIn'); if (inp) inp.placeholder = active === 'global' ? 'Nachricht an alle…' : `Nachricht an ${c ? c.name : '…'}…`;
+  }
+
+  // ---------- Abruf ----------
+  async function pollGlobal() {
     if (!cloud.enabled) return;
     try {
       const r = await cloud.chat();
       const changed = JSON.stringify(r.messages.map((m) => m.i)) !== JSON.stringify(msgs.map((m) => m.i));
       msgs = r.messages;
-      if (open) { if (changed) paintList(); markSeen(); } else onUnread(unread());
+      if (open && active === 'global') { if (changed) paintList(); markSeen(); } else { refreshBadge(); paintSide(); }
     } catch { /* offline: später wieder */ }
+  }
+  async function pollConvs() {
+    if (!cloud.loggedIn) { convs = []; return; }
+    try { convs = (await cloud.dmList()).convs; refreshBadge(); if (open) { paintSide(); paintHeader(); } } catch { /* ignore */ }
+  }
+  async function pollActive() {
+    if (!open || active === 'global' || !cloud.loggedIn) return;
+    const id = active;
+    try {
+      const r = await cloud.dmGet(id);
+      const changed = JSON.stringify(r.messages.map((m) => m.i)) !== JSON.stringify((dmMsgs[id] || []).map((m) => m.i));
+      dmMsgs[id] = r.messages;
+      if (active === id) { if (changed) paintList(); markSeen(); }
+    } catch { /* ignore */ }
   }
 
   async function send(text) {
-    if (busy) return; busy = true;
-    try { await cloud.chatSend(text); await poll(); paintList(true); return true; }
-    catch (e) { toast(`💬 ${esc(e.message)}`); return false; }
-    finally { busy = false; }
+    if (busy) return false; busy = true;
+    try {
+      if (active === 'global') { await cloud.chatSend(text); await pollGlobal(); }
+      else { await cloud.dmSend(active, text); await pollActive(); await pollConvs(); }
+      paintList(true); return true;
+    } catch (e) { toast(`💬 ${esc(e.message)}`); return false; } finally { busy = false; }
+  }
+
+  async function openConv(id) {
+    active = id; paintSide(); paintHeader();
+    const list = body && body.querySelector('#chatList'); if (list) { list.innerHTML = ''; list.dataset.init = ''; }
+    body?.querySelector('#chatNew')?.classList.add('hidden');
+    paintList(true);
+    if (id === 'global') await pollGlobal(); else await pollActive();
+    paintList(true); markSeen();
+    body?.querySelector('#chatIn')?.focus();
+  }
+
+  // Neuer privater Chat: Spieler auswählen
+  async function startPicker() {
+    const box = body.querySelector('#csNew'); picking = !picking;
+    if (!picking) { box.innerHTML = ''; return; }
+    box.innerHTML = '<form id="csForm" class="cs-form"><input type="text" id="csName" list="csPlayers" maxlength="16" placeholder="Spielername" autocomplete="off"><datalist id="csPlayers"></datalist><button type="submit">Chat starten</button><div class="note" id="csMsg"></div></form>';
+    cloud.players().then((r) => { const dl = box.querySelector('#csPlayers'); if (dl) dl.innerHTML = r.players.filter((n) => n !== cloud.name).map((n) => `<option value="${esc(n)}">`).join(''); }).catch(() => {});
+    box.querySelector('#csName').focus();
+    box.querySelector('#csForm').addEventListener('submit', async (e) => {
+      e.preventDefault(); const name = box.querySelector('#csName').value.trim(); const msg = box.querySelector('#csMsg'); if (!name) return;
+      try { const r = await cloud.dmOpen(name); await pollConvs(); picking = false; box.innerHTML = ''; await openConv(r.with); }
+      catch (err) { msg.textContent = '❌ ' + err.message; }
+    });
   }
 
   return {
-    start() { poll(); setInterval(() => { if (!open) poll(); }, 30000); },
+    start() { pollGlobal(); pollConvs(); timers.push(setInterval(() => { if (!open) { pollGlobal(); pollConvs(); } }, 30000)); },
     render(el, setTitle) {
       setTitle('💬 Chat'); body = el; open = true;
+      el.closest('dialog')?.classList.add('wide');
       const can = cloud.loggedIn;
-      el.innerHTML = `<div class="chat"><div class="chat-wrap"><div class="chat-list" id="chatList"></div><button type="button" id="chatNew" class="chat-new hidden"></button></div>
-        ${can ? '<form class="chat-form" id="chatForm"><input type="text" id="chatIn" maxlength="200" placeholder="Nachricht schreiben…" autocomplete="off"><button type="submit">Senden</button></form>' : '<div class="note chat-login">Melde dich unter „☁️ Anmelden“ an, um mitzuschreiben. Lesen kann jeder.</div>'}</div>`;
-      paintList(true); markSeen();
+      el.innerHTML = `<div class="chat2">
+        <aside class="chat-side">${can ? '<button type="button" id="dmNew" class="cs-new">➕ Privater Chat</button><div id="csNew"></div>' : ''}<div id="csList" class="cs-list"></div></aside>
+        <section class="chat-main"><div class="cm-title" id="chatTitle"></div>
+          <div class="chat-wrap"><div class="chat-list" id="chatList"></div><button type="button" id="chatNew" class="chat-new hidden"></button></div>
+          ${can ? '<form class="chat-form" id="chatForm"><input type="text" id="chatIn" maxlength="200" autocomplete="off"><button type="submit">Senden</button></form>' : '<div class="note chat-login">Melde dich unter „☁️ Anmelden“ an, um mitzuschreiben und private Chats zu führen. Lesen kann jeder.</div>'}</section></div>`;
+      active = 'global'; picking = false; paintSide(); paintHeader(); paintList(true); markSeen();
       const listEl = el.querySelector('#chatList');
-      listEl.addEventListener('scroll', () => updatePill(listEl), { passive: true });
+      listEl.addEventListener('scroll', () => { const pill = el.querySelector('#chatNew'); if (pill && nearBottom(listEl)) pill.classList.add('hidden'); }, { passive: true });
       el.querySelector('#chatNew').addEventListener('click', () => { toBottom(listEl); el.querySelector('#chatNew').classList.add('hidden'); });
-      clearInterval(timer); timer = setInterval(poll, 6000); poll();
+      el.querySelector('#csList').addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b && b.dataset.c !== active) openConv(b.dataset.c); });
+      el.querySelector('#dmNew')?.addEventListener('click', startPicker);
+      timers.forEach(clearInterval); timers = [];
+      timers.push(setInterval(() => { if (active === 'global') pollGlobal(); else pollActive(); }, 5000));
+      timers.push(setInterval(pollConvs, 10000));
+      pollGlobal(); pollConvs();
       el.querySelector('#chatForm')?.addEventListener('submit', async (e) => {
         e.preventDefault(); const inp = el.querySelector('#chatIn'); const t = inp.value.trim(); if (!t) return;
-        if (await send(t)) { inp.value = ''; }
+        if (await send(t)) inp.value = '';
         inp.focus();
       });
-      el.querySelector('#chatList').addEventListener('click', async (e) => {
+      listEl.addEventListener('click', async (e) => {
         const b = e.target.closest('.cm-del'); if (!b) return;
         try { await cloud.admin('chatDel', { mid: Number(b.dataset.mid) }); msgs = msgs.filter((m) => String(m.i) !== b.dataset.mid); paintList(); } catch (err) { toast(`❌ ${esc(err.message)}`); }
       });
     },
-    close() { open = false; body = null; clearInterval(timer); timer = null; },
+    close() { open = false; body = null; timers.forEach(clearInterval); timers = [setInterval(() => { pollGlobal(); pollConvs(); }, 30000)]; },
   };
 }

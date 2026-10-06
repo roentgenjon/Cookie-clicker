@@ -21,7 +21,7 @@ Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden e
 Spielstände speichern die Käufe lauflängenkodiert.
 
 ## Weitere Funktionen
-- 💬 Chat für alle Spieler (Moderation durch Admins: löschen, stumm schalten, leeren)
+- 💬 Chat: allgemeiner Chat für alle und private 1:1-Chats (Seitenleiste, Spieler auswählen); Moderation durch Admins im allgemeinen Chat (löschen, stumm schalten, leeren)
 - 🔊 Sound und 🌧️ Keks-Regen (in den Optionen abschaltbar)
 - 🏆 Rangliste nach Gesamt-Keksen, Kekse pro Sekunde und Aufstiegen, mit eigenem Platz
 - 📅 Tägliche Aufgaben mit Serie und Tagesbonus

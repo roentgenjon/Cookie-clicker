@@ -360,6 +360,53 @@ export default {
         return json(env, { ok: true });
       }
 
+      // ---- Private Chats (1:1): nur die beiden Teilnehmer können Nachrichten lesen und schreiben ----
+      if (url.pathname.startsWith('/api/dm/') && req.method === 'POST') {
+        const b = await req.json();
+        const au = await authenticate(env, b);
+        if (au.err) return au.err;
+        const me = b.id; const a = url.pathname.slice(8);
+        const index = async (id) => (await env.SAVES.get('dml:' + id, 'json')) || [];
+        const nameOf = async (id) => ((await env.SAVES.getWithMetadata('p:' + id, 'text')).metadata || {}).n;
+        const upsert = async (id, entry) => { const l = await index(id); const i = l.findIndex((x) => x.id === entry.id); if (i >= 0) l[i] = { ...l[i], ...entry }; else l.push(entry); await env.SAVES.put('dml:' + id, JSON.stringify(l.slice(-100))); };
+
+        if (a === 'list') { const l = (await index(me)).sort((x, y) => (y.last || 0) - (x.last || 0)); return json(env, { convs: l, now: Date.now() }); }
+
+        if (a === 'open') { // Chat mit einem Spieler (per Name) anlegen
+          const toId = await nameToId(b.to || '');
+          if (toId === me) return fail(env, 'Du kannst keinen Chat mit dir selbst anlegen.');
+          const toName = await nameOf(toId); if (!toName) return fail(env, 'Spieler nicht gefunden', 404);
+          if (await env.SAVES.get('ban:' + toId)) return fail(env, 'Mit diesem Spieler ist kein Chat möglich.');
+          const myName = (await nameOf(me)) || 'Anonym';
+          if (!(await index(me)).some((x) => x.id === toId)) await upsert(me, { id: toId, name: toName, last: Date.now() });
+          if (!(await index(toId)).some((x) => x.id === me)) await upsert(toId, { id: me, name: myName, last: Date.now() });
+          return json(env, { with: toId, name: toName });
+        }
+
+        const other = typeof b.with === 'string' && ID_RE.test(b.with) && b.with !== me ? b.with : null;
+        if (!other) return fail(env, 'Ungültiger Chat');
+        const key = 'dm:' + (me < other ? me + ':' + other : other + ':' + me);
+        if (a === 'get') return json(env, { messages: (await env.SAVES.get(key, 'json')) || [], now: Date.now() });
+
+        if (a === 'send') {
+          const text = cleanChat(b.text).slice(0, 300); if (!text) return fail(env, 'Leere Nachricht');
+          if (await env.SAVES.get('mute:' + me)) return fail(env, 'Du bist stumm geschaltet.', 403, { muted: true });
+          const toName = await nameOf(other); if (!toName) return fail(env, 'Spieler nicht gefunden', 404);
+          if (await env.SAVES.get('ban:' + other)) return fail(env, 'Mit diesem Spieler ist kein Chat möglich.');
+          const list = (await env.SAVES.get(key, 'json')) || []; const now = Date.now();
+          const mine = [...list].reverse().find((m) => m.f === me);
+          if (mine && now - mine.t < 1500) return fail(env, 'Nicht so schnell!', 429);
+          if (mine && mine.x === text && now - mine.t < 60000) return fail(env, 'Diese Nachricht hast du gerade schon gesendet.', 429);
+          list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, f: me, x: text });
+          await env.SAVES.put(key, JSON.stringify(list.slice(-100)));
+          const myName = (await nameOf(me)) || 'Anonym'; const preview = text.slice(0, 60);
+          await upsert(me, { id: other, name: toName, last: now, lastFrom: me, lastText: preview });
+          await upsert(other, { id: me, name: myName, last: now, lastFrom: me, lastText: preview });
+          return json(env, { ok: true });
+        }
+        return fail(env, 'Nicht gefunden', 404);
+      }
+
       if (url.pathname === '/api/admin' && req.method === 'POST') return admin(env, await req.json());
 
       return fail(env, 'Nicht gefunden', 404);
