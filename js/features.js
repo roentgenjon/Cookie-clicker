@@ -1,6 +1,7 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
 import { SKINS, TASK_INFO, ITEMS, itemCost, itemMaxAffordable, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
+import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseNum } from './admin.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -101,5 +102,33 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
   body.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', () => { if (game.selectSound(b.dataset.use)) { apply(); changed(); preview(soundTab, b.dataset.use); redraw(); } }));
   body.querySelectorAll('[data-buy]').forEach((b) => b.addEventListener('click', () => {
     const id = b.dataset.buy; if (game.buySound(id)) { game.selectSound(id); apply(); buySound(); toast(`🔊 <b>${(list.find((d) => d.id === id) || {}).name}</b> gekauft und aktiviert!`); changed(); redraw(); }
+  }));
+}
+
+// ---- Mega-Upgrades: 100 Reihen mit je ~100 Billionen Stufen ----
+let megaAmt = 1; // 1 / 10 / 100 / 1000 / 'max'
+const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, seriesMaxAffordable(SERIES[i], game.series[i], game.cookies)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
+const big = (n) => BigInt(Math.floor(n)).toLocaleString('de-DE');
+export function megaStateKey(game) { return game.series.join() + megaAmt + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies >= seriesCost(SERIES[i], game.series[i], megaN(i, game)) ? 2 : 1) : 0)).join(''); }
+
+export function renderMega(body, { game, fmt, toast, title, changed, buySound }) {
+  title('♾️ Mega-Upgrades');
+  const vis = SERIES.map((_, i) => i).filter((i) => game.seriesVisible(i));
+  vis.sort((a, b) => game.seriesPrice(a, 1) - game.seriesPrice(b, 1));
+  const locked = SERIES.map((_, i) => i).filter((i) => !game.seriesVisible(i)).sort((a, b) => (SERIES[a].need || 0) - (SERIES[b].need || 0) || (SERIES[a].baked || 0) - (SERIES[b].baked || 0));
+  body.innerHTML = `<div class="stack">
+    <div class="shop-top"><div><b>${big(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</b><div class="note">Upgrades gekauft (normale + Mega-Stufen)</div></div>
+      <div class="seg" id="mgAmt">${[1, 10, 100, 1000, 'max'].map((n) => `<button data-n="${n}" class="${n === megaAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
+    <p class="note">Jede Reihe hat knapp <b>100 Billionen Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
+    <div class="items">${vis.map((i) => {
+      const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = Number.isFinite(cost) && game.cookies >= cost;
+      return `<div class="item ${have ? 'has' : ''}"><div class="ie">${s.icon}<small class="ib">${s.badge}</small></div><div class="in"><b>${s.name}</b><div class="ip">${seriesDesc(s).split(': ').pop()}</div><div class="have">Stufe <b>${big(have)}</b>${have ? ` · aktuell ×${fmt(seriesFactor(s, have))}` : ''}</div></div><button data-mg="${i}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${Number.isFinite(cost) ? fmt(cost) : '∞'}</button></div>`;
+    }).join('') || '<div class="adm-empty">Noch keine Reihe freigeschaltet. Kaufe Gebäude!</div>'}</div>
+    ${locked.length ? `<div class="adm-sec"><h4>🔒 ${locked.length} weitere Reihen gesperrt</h4>${locked.slice(0, 5).map((i) => `<div class="adm-sched"><span>${SERIES[i].icon}</span><span>${SERIES[i].name}</span><span class="note">${seriesNeedText(SERIES[i])}</span></div>`).join('')}</div>` : ''}</div>`;
+  const redraw = () => renderMega(body, { game, fmt, toast, title, changed, buySound });
+  body.querySelector('#mgAmt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; megaAmt = b.dataset.n === 'max' ? 'max' : +b.dataset.n; redraw(); });
+  body.querySelectorAll('[data-mg]').forEach((b) => b.addEventListener('click', () => {
+    const i = +b.dataset.mg; const got = game.buySeries(i, megaN(i, game));
+    if (got) { buySound(); changed(); redraw(); }
   }));
 }

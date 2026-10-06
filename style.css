@@ -154,3 +154,4 @@ textarea#msg{min-height:84px;resize:vertical}
 
 .chat-wrap{position:relative}
 .chat-new{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--accent);color:#000;border-color:var(--accent);font-weight:700;box-shadow:0 4px 14px #0008;z-index:2}
+.item .ie{position:relative}.item .ib{position:absolute;right:-2px;bottom:-4px;font-size:14px}

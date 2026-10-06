@@ -1,3 +1,4 @@
+import { SERIES, SERIES_COUNT, SERIES_LEVELS, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemMultiplier, itemCost, itemMaxAffordable, soundDef, soundKind } from './extras.js';
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
@@ -47,6 +48,7 @@ export class Game {
     this.ascensions = 0; this.chipsEarned = 0; this.chipsSpent = 0;
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
+    this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
     this.items = {}; // gekaufte Shop-Items { id: Anzahl } (bleiben beim Aufstieg)
     this.sounds = { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' }; // Sound-Shop (bleibt beim Aufstieg)
     this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 }, claimed: [], streak: 0, lastDone: '' };
@@ -86,9 +88,32 @@ export class Game {
         else this.offlineCap += EFFECT.hOffline;
     }
   }
+  // ---- Mega-Upgrades (Reihen) ----
+  applySeriesFactor(i, n) {
+    const s = SERIES[i]; const f = seriesFactor(s, n);
+    if (s.kind === 'bld') this.tierMult[s.b] = Math.min(1e300, this.tierMult[s.b] * f);
+    else if (s.kind === 'click') this.clickMult = Math.min(1e300, this.clickMult * f);
+    else this.globalMult = Math.min(1e300, this.globalMult * f);
+  }
+  get seriesTotal() { let t = 0; for (const n of this.series) t += n; return t; }
+  seriesVisible(i) { const s = SERIES[i]; return s.kind === 'bld' ? this.owned[s.b] >= s.need : this.totalReset + this.total >= s.baked; }
+  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n); }
+  // n = Anzahl oder 'max'; gibt die gekauften Stufen zurück
+  buySeries(i, n = 1) {
+    const s = SERIES[i]; if (!s || !this.seriesVisible(i)) return 0;
+    const have = this.series[i];
+    if (n === 'max') n = seriesMaxAffordable(s, have, this.cookies);
+    n = Math.min(n, SERIES_LEVELS - have);
+    if (!(n >= 1)) return 0;
+    const cost = seriesCost(s, have, n);
+    if (!Number.isFinite(cost) || cost > this.cookies) return 0;
+    this.cookies -= cost; this.series[i] = have + n; this.applySeriesFactor(i, n); this.daily.prog.upgrades += Math.min(n, 1e6); this.updateCps();
+    return n;
+  }
   recalc() {
     this.resetAgg();
     for (let id = 0; id < TOTAL_UPGRADES; id++) if (this.bought[id]) this.applyOne(id);
+    for (let i = 0; i < SERIES_COUNT; i++) if (this.series[i] > 0) this.applySeriesFactor(i, this.series[i]);
     this.updateCps();
   }
 
@@ -286,7 +311,7 @@ export class Game {
       case 'achievements': this.ach.fill(1); this.updateCps(); return 'Alle Erfolge freigeschaltet!';
       case 'upgrades':
         for (let i = 0; i < TOTAL_UPGRADES; i++) {
-          if (ev.mode === 'none') this.bought[i] = 0;
+          if (ev.mode === 'none') { this.bought[i] = 0; this.series.fill(0); }
           else if (ev.mode === 'all' || (ev.mode === 'cookie' && i < HEAVEN_START) || (ev.mode === 'heaven' && i >= HEAVEN_START)) this.bought[i] = 1;
         }
         this.recalc(); return ev.mode === 'none' ? 'Alle Upgrades wurden entfernt.' : 'Upgrades freigeschaltet!';
@@ -305,7 +330,7 @@ export class Game {
     this.totalReset += this.total; this.chipsEarned += gain; this.ascensions++;
     this.cookies = 0; this.total = 0;
     this.owned.fill(0);
-    this.bought.fill(0, 0, HEAVEN_START);
+    this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);
     this.buffs = []; this.gcs = []; this.nextGolden = 60;
     this.recalc();
     return true;
@@ -314,7 +339,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0), owned: this.owned, totalAll: this.totalReset + this.total, cps: this.baseCps, clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned };
+    const s = { itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0), seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset + this.total, cps: this.baseCps, clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
@@ -326,7 +351,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies, total: this.total, totalReset: this.totalReset, clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds,
+      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
     };
   }
   load(d) {
@@ -342,6 +367,7 @@ export class Game {
     this.ascensions = num(d.ascensions); this.chipsEarned = num(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
+    if (Array.isArray(d.series)) this.series = Array.from({ length: SERIES_COUNT }, (_, i) => { const n = Number(d.series[i]); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), SERIES_LEVELS) : 0; });
     if (d.sounds && typeof d.sounds === 'object') {
       const own = Array.isArray(d.sounds.owned) ? d.sounds.owned.filter((id) => soundKind(id)) : [];
       this.sounds.owned = [...new Set(['classic', 'calm', ...own])];

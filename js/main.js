@@ -4,9 +4,10 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift, renderItems, itemsStateKey, renderSoundShop } from './features.js';
+import { renderDaily, renderSkins, renderGift, renderItems, itemsStateKey, renderSoundShop, renderMega, megaStateKey } from './features.js';
+import { TOTAL_ALL_TEXT } from './mega.js';
 import { skinById, itemById } from './extras.js';
-let itemsKey = '';
+let itemsKey = ''; let megaKey = '';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -164,7 +165,7 @@ function renderUpgrades() {
     ids = a.ids.concat(h.ids); total = a.total + h.total;
   } else ({ ids, total } = game.visibleList(false, K[filter.toUpperCase()], shown));
   const key = ids.map((id) => id + (game.canAfford(id) ? '+' : '-')).join() + '|' + total;
-  $('#upCount').textContent = `${game.upgradeCount.toLocaleString('de-DE')} / ${TOTAL_UPGRADES.toLocaleString('de-DE')} gekauft · ${total.toLocaleString('de-DE')} verfügbar`;
+  $('#upCount').textContent = `${(BigInt(game.upgradeCount) + BigInt(Math.floor(game.seriesTotal))).toLocaleString('de-DE')} / ${TOTAL_ALL_TEXT} gekauft · ${total.toLocaleString('de-DE')} verfügbar`;
   if (key === lastKey) return; lastKey = key;
   $('#upgrades').innerHTML = ids.map((id) => { const u = upgrade(id); return `<button class="up ${u.kind === 'heaven' ? 'heaven ' : ''}${game.canAfford(id) ? 'ok' : 'no'}" data-id="${id}">${u.icon}</button>`; }).join('');
   const more = total - ids.length;
@@ -227,7 +228,7 @@ function renderModal() {
       <span>Klicks</span><span>${fmt(game.clicks)}</span>
       <span>Goldene Kekse geklickt</span><span>${fmt(game.golden)}</span>
       <span>Gebäude</span><span>${fmt(game.owned.reduce((a, b) => a + b, 0))}</span>
-      <span>Upgrades</span><span>${game.upgradeCount.toLocaleString('de-DE')} / ${TOTAL_UPGRADES.toLocaleString('de-DE')}</span>
+      <span>Upgrades</span><span>${(BigInt(game.upgradeCount) + BigInt(Math.floor(game.seriesTotal))).toLocaleString('de-DE')} / ${TOTAL_ALL_TEXT}</span>
       <span>Erfolge</span><span>${game.achCount()} / ${ACH.length}</span>
       <span>Aufstiege</span><span>${game.ascensions}</span>
       <span>Himmelschips</span><span>${fmt(game.chipsAvailable)} frei / ${fmt(game.chipsEarned)} gesamt</span>
@@ -247,6 +248,7 @@ function renderModal() {
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
   else if (modalKind === 'daily') renderDaily($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { saveLocal(); $('#dailyBadge').textContent = game.claimableCount() || ''; lastKey = ''; } });
+  else if (modalKind === 'mega') renderMega($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { lastKey = ''; saveLocal(); }, buySound: () => sound.buy() });
   else if (modalKind === 'items') renderItems($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { renderItemBar(); applySkin(); saveLocal(); }, buySound: () => sound.shop() });
   else if (modalKind === 'sounds') renderSoundShop($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => saveLocal(), buySound: () => sound.shop(), apply: applySounds, preview: (kind, id) => (kind === 'pack' ? sound.previewPack(id) : sound.previewTrack(id)) });
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
@@ -408,7 +410,7 @@ function frame(now) {
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
-    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); applySounds(); if (modalKind === 'daily') renderModal(); if (modalKind === 'items') { const k = itemsStateKey(game); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
+    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); applySounds(); if (modalKind === 'daily') renderModal(); if (modalKind === 'mega') { const k = megaStateKey(game); if (k !== megaKey) { megaKey = k; renderModal(); } } if (modalKind === 'items') { const k = itemsStateKey(game); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
   if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }

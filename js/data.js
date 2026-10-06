@@ -128,6 +128,7 @@ export function buildAchievements() {
   asc.forEach((n) => add(`Wiedergeburt ${n}`, `${n}× aufsteigen`, '🪽', (s) => s.ascensions >= n));
   [1, 5, 11].forEach((n) => add(`Feinschmecker ${n}`, n === 11 ? 'Von jedem Shop-Item mindestens eins besitzen' : `${n} verschiedene Shop-Item${n > 1 ? 's' : ''} besitzen`, '🛒', (s) => s.itemCount >= n));
   [10, 100, 1000].forEach((n) => add(`Sammler ${n}`, `${n} Shop-Items insgesamt besitzen`, '🧺', (s) => s.itemTotal >= n));
+  [1, 100, 10000, 100000].forEach((n) => add(`Mega-Sammler ${n.toLocaleString('de-DE')}`, `${n.toLocaleString('de-DE')} Mega-Upgrade-Stufen kaufen`, '♾️', (s) => s.seriesTotal >= n));
   const chips = [1, 10, 100, 1000];
   chips.forEach((n) => add(`Himmelsstaub ${n}`, `${n} Himmelschips verdient`, '😇', (s) => s.chipsEarned >= n));
   return a;
