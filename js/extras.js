@@ -15,7 +15,7 @@ export const SKINS = [
   { id: 'alien', name: 'Außerirdischer', emoji: '👽', req: '100.000 Upgrades', need: (s) => s.upgrades >= 100000 },
   { id: 'rainbow', name: 'Regenbogenkeks', emoji: '🍪', cls: 'rainbow', req: '150 Erfolge', need: (s) => s.ach >= 150 },
   { id: 'gold', name: 'Goldkeks', emoji: '🌟', req: '1e30 Kekse gebacken', need: (s) => s.totalAll >= 1e30 },
-  { id: 'icetea', name: 'Eistee', emoji: '🥤', req: 'Eistee-Flasche im Shop kaufen', need: (s) => (s.items || []).includes('icetea') },
+  { id: 'icetea', name: 'Eistee', emoji: '🥤', req: 'Eistee-Flasche im Shop kaufen', need: (s) => ((s.items || {}).icetea || 0) > 0 },
 ];
 export const skinById = (id) => SKINS.find((k) => k.id === id) || SKINS[0];
 
@@ -46,8 +46,9 @@ export function genTasks(date, baseCps) {
   }));
 }
 
-// ---- Item-Shop: einmalige Käufe für Kekse, geben dauerhaft +x % Produktion und Klickertrag ----
-// Items bleiben beim Aufstieg erhalten.
+// ---- Item-Shop: beliebig oft kaufbar, jedes Exemplar gibt dauerhaft +x % Produktion und Klickertrag ----
+// Der Preis steigt mit jedem Exemplar (×1,12). Items bleiben beim Aufstieg erhalten.
+export const ITEM_GROWTH = 1.12;
 export const ITEMS = [
   { id: 'choco', name: 'Schoko-Keks', emoji: '🍪', pct: 15, cost: 1e5 },
   { id: 'milk', name: 'Glas Milch', emoji: '🥛', pct: 25, cost: 5e6 },
@@ -62,4 +63,10 @@ export const ITEMS = [
   { id: 'icetea', name: 'Eistee-Flasche', emoji: '🥤', pct: 1000, cost: 1e27, best: true },
 ];
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
-export const itemMultiplier = (owned) => 1 + owned.reduce((a, id) => a + ((itemById(id) || {}).pct || 0), 0) / 100;
+// owned = { id: Anzahl }
+export const itemMultiplier = (owned) => 1 + ITEMS.reduce((a, it) => a + it.pct * (owned[it.id] || 0), 0) / 100;
+export const itemCost = (it, have, n = 1) => it.cost * Math.pow(ITEM_GROWTH, have) * (Math.pow(ITEM_GROWTH, n) - 1) / (ITEM_GROWTH - 1);
+export function itemMaxAffordable(it, have, cookies) {
+  const n = Math.floor(Math.log(1 + (cookies * (ITEM_GROWTH - 1)) / (it.cost * Math.pow(ITEM_GROWTH, have))) / Math.log(ITEM_GROWTH));
+  return Math.max(0, n);
+}

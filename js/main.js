@@ -4,8 +4,8 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift, renderItems } from './features.js';
-import { skinById, itemById, ITEMS } from './extras.js';
+import { renderDaily, renderSkins, renderGift, renderItems, itemsStateKey } from './features.js';
+import { skinById, itemById } from './extras.js';
 let itemsKey = '';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ addEventListener('blur', stopHold);
 // ---------- Besessene Items unter dem Keks ----------
 let itemBarKey = '';
 function renderItemBar() {
-  const key = game.items.join(); if (key === itemBarKey) return; itemBarKey = key;
-  $('#itemBar').innerHTML = game.items.map((id) => { const it = itemById(id); return `<span title="${it.name} +${it.pct} %">${it.emoji}</span>`; }).join('');
+  const key = JSON.stringify(game.items); if (key === itemBarKey) return; itemBarKey = key;
+  $('#itemBar').innerHTML = Object.entries(game.items).map(([id, n]) => { const it = itemById(id); return `<span title="${it.name} ×${n} (+${n * it.pct} %)">${it.emoji}<small>${n > 999 ? '999+' : n}</small></span>`; }).join('');
 }
 
 // ---------- Skin & Keks-Regen ----------
@@ -403,7 +403,7 @@ function frame(now) {
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
-    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); if (modalKind === 'daily') renderModal(); if (modalKind === 'items') { const k = ITEMS.map((it) => (game.items.includes(it.id) ? 2 : game.cookies >= it.cost ? 1 : 0)).join(''); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
+    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); if (modalKind === 'daily') renderModal(); if (modalKind === 'items') { const k = itemsStateKey(game); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
   if (cloud.loggedIn && cloudT >= 30) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }
