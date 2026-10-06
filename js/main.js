@@ -288,21 +288,21 @@ async function renderCloud() {
   const msg = (t) => { const e = $('#cMsg'); if (e) e.textContent = t; };
   if (!cloud.loggedIn) {
     body.innerHTML = `<form class="stack" id="loginForm">
-      <p>Gib deinen <b>Namen</b> und ein <b>Passwort</b> ein. Neuer Name = neues Konto, bekannter Name = dein Fortschritt wird aus der Datenbank geladen.</p>
+      <p>Gib deinen <b>Namen</b> (2–16 Zeichen) und ein <b>Passwort</b> (mindestens 4 Zeichen) ein.<br>🆕 <b>Neu hier?</b> Tippe auf „Konto erstellen“.<br>🔑 <b>Schon ein Konto?</b> Tippe auf „Anmelden“, dein Fortschritt wird geladen.</p>
       <label>Name<input type="text" id="lName" maxlength="16" autocomplete="username" value="${esc(game.name === 'Dein' ? '' : game.name)}"></label>
       <label>Passwort<input type="password" id="lPass" autocomplete="current-password"></label>
       <details id="lSetupBox"><summary class="note">Admin-Erstanmeldung (nur beim allerersten Mal für reservierte Admin-Namen)</summary><label>Setup-Code<input type="password" id="lSetup" autocomplete="off"></label></details>
-      <div class="rowf"><button type="submit" id="lGo">🔑 Anmelden / Registrieren</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
+      <div class="rowf"><button type="submit" id="lGo" data-mode="register" class="adm-go">🆕 Konto erstellen</button><button type="submit" id="lIn" data-mode="login">🔑 Anmelden</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></form>`;
     $('#lGuest').addEventListener('click', () => { ls.set('cc_guest', '1'); modal.close(); });
     $('#loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault(); $('#lGo').disabled = true; msg('Anmelden…');
+      e.preventDefault(); const mode = (e.submitter && e.submitter.dataset.mode) || 'login'; $('#lGo').disabled = true; $('#lIn').disabled = true; msg(mode === 'register' ? 'Konto wird erstellt…' : 'Anmelden…');
       try {
-        const r = await cloud.login($('#lName').value, $('#lPass').value);
+        const r = await cloud.login($('#lName').value, $('#lPass').value, mode);
         if (r.isNew) { game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
         else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
         $('#bakeryName').textContent = game.name; updateCloudBtn(); checkAdmin(); startEvents(); modal.close();
-      } catch (err) { msg('❌ ' + err.message); $('#lGo').disabled = false; }
+      } catch (err) { msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
     });
   } else {
     body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.</p>
