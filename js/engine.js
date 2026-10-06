@@ -110,6 +110,22 @@ export class Game {
     this.cookies -= cost; this.series[i] = have + n; this.applySeriesFactor(i, n); this.daily.prog.upgrades += Math.min(n, 1e6); this.updateCps();
     return n;
   }
+  // „Alle kaufen“ für Mega-Reihen: das Guthaben wird gleichmäßig auf alle freigeschalteten Reihen verteilt (4 Runden, Reste fließen weiter)
+  buyAllSeries() {
+    let total = 0;
+    for (let round = 0; round < 4; round++) {
+      const vis = []; for (let i = 0; i < SERIES_COUNT; i++) if (this.seriesVisible(i)) vis.push(i);
+      if (!vis.length || this.cookies <= 0) break;
+      vis.sort((a, b) => this.seriesPrice(a, 1) - this.seriesPrice(b, 1));
+      const share = this.cookies / vis.length; let any = false;
+      for (const i of vis) {
+        const n = seriesMaxAffordable(SERIES[i], this.series[i], Math.min(share, this.cookies));
+        if (n >= 1) { const got = this.buySeries(i, n); if (got) { total += got; any = true; } }
+      }
+      if (!any) break;
+    }
+    return total;
+  }
   recalc() {
     this.resetAgg();
     for (let id = 0; id < TOTAL_UPGRADES; id++) if (this.bought[id]) this.applyOne(id);

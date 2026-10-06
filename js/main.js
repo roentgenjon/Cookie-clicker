@@ -153,7 +153,8 @@ $('#moreUp').addEventListener('click', () => { shown = Math.min(shown * 2, MAX_S
 $('#buyAll').addEventListener('click', () => {
   const kind = K[filter.toUpperCase()];
   const n = filter === 'heaven' ? game.buyAllAffordable(true) : filter === 'all' ? game.buyAllAffordable(false) + game.buyAllAffordable(true) : game.buyAllAffordable(false, kind);
-  toast(n ? `${n.toLocaleString('de-DE')} Upgrades gekauft` : 'Nichts bezahlbar'); lastKey = '';
+  const mega = filter === 'all' ? game.buyAllSeries() : 0; // „Alle“ kauft auch Mega-Stufen
+  toast(n || mega ? `${n ? `${n.toLocaleString('de-DE')} Upgrades` : ''}${n && mega ? ' + ' : ''}${mega ? `${mega.toLocaleString('de-DE')} Mega-Stufen` : ''} gekauft` : 'Nichts bezahlbar'); if (n || mega) sound.buy(); lastKey = '';
 });
 $('#upgrades').addEventListener('click', (e) => { const b = e.target.closest('.up'); if (b && game.buyUpgrade(+b.dataset.id)) { lastKey = ''; hideTip(); sound.buy(); } });
 let lastKey = '';
