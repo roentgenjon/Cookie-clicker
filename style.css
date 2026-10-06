@@ -201,3 +201,11 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 .banner small{opacity:.5;flex:none}
 @keyframes bnIn{from{transform:translateY(-70px);opacity:0}to{transform:none;opacity:1}}
 #banners{margin:0;padding:0;border:0;background:none;overflow:visible;right:auto;bottom:auto;color:var(--text)}#banners:empty{display:none}
+
+/* ---- Bann-Bildschirm: komplett schwarz, nicht schließbar ---- */
+#banScreen{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:#000;color:#fff;overflow:hidden}
+#banScreen:popover-open{display:flex;align-items:center;justify-content:center;text-align:center}
+#banScreen::backdrop{background:#000}
+#banScreen h1{font-size:clamp(1.8rem,6vw,3.4rem);margin:.3em 0;color:#ff4d4d}
+#banScreen p{font-size:clamp(1rem,2.6vw,1.3rem);opacity:.8;line-height:1.5}
+.ban-i{font-size:clamp(4rem,14vw,8rem)}
