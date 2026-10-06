@@ -312,7 +312,10 @@ export default {
 
       return fail(env, 'Nicht gefunden', 404);
     } catch (e) {
-      return fail(env, 'Serverfehler', 500);
+      const msg = String((e && e.message) || e);
+      // Kostenloser Cloudflare-Plan: Tageslimit für Schreibvorgänge erreicht
+      if (/limit exceeded|too many requests|quota/i.test(msg)) return fail(env, 'Der Server hat sein Tageslimit erreicht. Dein Fortschritt bleibt lokal gespeichert. Bitte später noch einmal versuchen.', 503, { limit: true });
+      return fail(env, 'Serverfehler', 500, { detail: msg.slice(0, 120) });
     }
   },
 };

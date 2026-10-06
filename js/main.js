@@ -321,10 +321,10 @@ async function loadLb(by = lbBy) {
   } catch (e) { box.textContent = '❌ ' + e.message; }
 }
 function cloudSave(keepalive = false, setup) {
-  if (banned) return Promise.resolve();
-  return cloud.save(game.serialize(), game.totalReset + game.total, keepalive, setup, { cps: game.baseCps, asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); throw e; });
+  if (banned || Date.now() < limitUntil) return Promise.resolve();
+  return cloud.save(game.serialize(), game.totalReset + game.total, keepalive, setup, { cps: game.baseCps, asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
-let banned = false;
+let banned = false; let lastHideSave = 0; let limitUntil = 0;
 function onBanned() { if (banned) return; banned = true; toast('🚫 Dein Konto wurde gesperrt. Dein Fortschritt wird nicht mehr gespeichert.'); }
 
 // ---------- Eingeblendete Admin-Nachrichten (bleiben, bis man sie schließt) ----------
@@ -358,7 +358,7 @@ async function pollEvents() {
 let evTimer = null;
 function startEvents() {
   if (!ls.get('cc_bc')) ls.set('cc_bc', String(Date.now()));
-  if (!evTimer) evTimer = setInterval(pollEvents, 10000);
+  if (!evTimer) evTimer = setInterval(pollEvents, 20000);
   pollEvents();
 }
 async function checkAdmin() {
@@ -404,10 +404,10 @@ function frame(now) {
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
     $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); if (modalKind === 'daily') renderModal(); if (modalKind === 'items') { const k = itemsStateKey(game); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
-  if (cloud.loggedIn && cloudT >= 30) { cloudT = 0; cloudSave().catch(() => {}); }
+  if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 setInterval(saveLocal, 15000);
 addEventListener('beforeunload', saveLocal);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { saveLocal(); if (cloud.loggedIn) cloudSave(true).catch(() => {}); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { saveLocal(); if (cloud.loggedIn && Date.now() - lastHideSave > 60000) { lastHideSave = Date.now(); cloudSave(true).catch(() => {}); } } });

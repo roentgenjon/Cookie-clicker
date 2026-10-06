@@ -45,7 +45,7 @@ export function createChat({ toast, isAdmin, onUnread }) {
       el.innerHTML = `<div class="chat"><div class="chat-list" id="chatList"></div>
         ${can ? '<form class="chat-form" id="chatForm"><input type="text" id="chatIn" maxlength="200" placeholder="Nachricht schreiben…" autocomplete="off"><button type="submit">Senden</button></form>' : '<div class="note chat-login">Melde dich unter „☁️ Anmelden“ an, um mitzuschreiben. Lesen kann jeder.</div>'}</div>`;
       paintList(); markSeen();
-      clearInterval(timer); timer = setInterval(poll, 4000); poll();
+      clearInterval(timer); timer = setInterval(poll, 6000); poll();
       el.querySelector('#chatForm')?.addEventListener('submit', async (e) => {
         e.preventDefault(); const inp = el.querySelector('#chatIn'); const t = inp.value.trim(); if (!t) return;
         if (await send(t)) { inp.value = ''; }
