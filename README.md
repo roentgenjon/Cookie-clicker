@@ -26,6 +26,10 @@ Spielstände speichern die Käufe lauflängenkodiert.
 - 🎁 Geschenke zwischen Spielern (max. 50 % des Vorrats, 5 pro Tag)
 - 🛡️ Admin-Panel: Sterne spawnen, Boosts, Geben, Upgrades, Nachrichten, Zeitplan, Admins ernennen, sperren/stumm/zurücksetzen/löschen
 
+## Datenbank
+Der Worker speichert alles in **Cloudflare D1** (SQLite, kostenlos 100.000 Schreibvorgänge/Tag). Die frühere KV-Datenbank
+(nur 1.000 Schreibvorgänge/Tag im Gratis-Plan) wurde beim ersten Start automatisch nach D1 übernommen und dient nur noch als Sicherung.
+
 ## Einrichtung
 1. **Cloudflare Worker deployen** – im GitHub-Repo unter *Settings → Secrets and variables → Actions* anlegen:
    `CLOUDFLARE_API_TOKEN` und `CLOUDFLARE_ACCOUNT_ID`, dann Workflow „Deploy Cloudflare Worker“ starten

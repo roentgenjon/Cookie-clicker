@@ -201,12 +201,64 @@ async function admin(env, b) {
   }
 }
 
+// ---- Speicher: Cloudflare D1 (SQLite) mit KV-ähnlicher Schnittstelle -------------------------------
+// D1 erlaubt im kostenlosen Plan 100.000 Schreibvorgänge pro Tag (KV nur 1.000). Alle anderen Funktionen
+// benutzen weiter get/put/delete/list/getWithMetadata, daher bleibt die Logik unverändert.
+class Store {
+  constructor(db) { this.db = db; }
+  async row(key) {
+    const r = await this.db.prepare('SELECT v, meta, exp FROM kv WHERE k = ?1').bind(key).first();
+    return r && !(r.exp && r.exp < Date.now()) ? r : null;
+  }
+  async get(key, type = 'text') { const r = await this.row(key); if (!r) return null; return type === 'json' ? JSON.parse(r.v) : r.v; }
+  async getWithMetadata(key) { const r = await this.row(key); return { value: r ? r.v : null, metadata: r && r.meta ? JSON.parse(r.meta) : null }; }
+  put(key, value, opts = {}, ifAbsent = false) {
+    const exp = opts.expirationTtl ? Date.now() + opts.expirationTtl * 1000 : null; const meta = opts.metadata ? JSON.stringify(opts.metadata) : null;
+    const sql = ifAbsent ? 'INSERT OR IGNORE INTO kv (k, v, meta, exp) VALUES (?1, ?2, ?3, ?4)' : 'INSERT INTO kv (k, v, meta, exp) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(k) DO UPDATE SET v = ?2, meta = ?3, exp = ?4';
+    return this.db.prepare(sql).bind(key, String(value), meta, exp).run();
+  }
+  delete(key) { return this.db.prepare('DELETE FROM kv WHERE k = ?1').bind(key).run(); }
+  async list({ prefix = '', limit = 1000 } = {}) {
+    const { results } = await this.db.prepare('SELECT k, meta FROM kv WHERE substr(k, 1, length(?1)) = ?1 AND (exp IS NULL OR exp > ?2) ORDER BY k LIMIT ?3').bind(prefix, Date.now(), limit).all();
+    return { keys: results.map((r) => ({ name: r.k, metadata: r.meta ? JSON.parse(r.meta) : undefined })) };
+  }
+}
+
+let dbReady = false;
+async function ensureDb(env) {
+  if (dbReady) return;
+  await env.DB.exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, meta TEXT, exp INTEGER)');
+  const store = new Store(env.DB);
+  if (!(await store.get('_migrated'))) await migrateFromKv(env.SAVES, store); // einmalig: alte KV-Daten übernehmen
+  await env.DB.prepare('DELETE FROM kv WHERE exp IS NOT NULL AND exp < ?1').bind(Date.now()).run(); // Abgelaufenes aufräumen
+  dbReady = true;
+}
+// Kopiert alle Einträge der alten KV-Datenbank nach D1 (überschreibt nichts, was in D1 schon neuer ist)
+async function migrateFromKv(kv, store) {
+  if (!kv) return;
+  let cursor;
+  do {
+    const r = await kv.list({ limit: 1000, cursor });
+    for (const k of r.keys) {
+      const { value, metadata } = await kv.getWithMetadata(k.name, 'text');
+      if (value === null) continue;
+      const ttl = k.expiration ? Math.max(60, k.expiration - Math.floor(Date.now() / 1000)) : undefined;
+      await store.put(k.name, value, { metadata: metadata || undefined, expirationTtl: ttl }, true);
+    }
+    cursor = r.list_complete ? undefined : r.cursor;
+  } while (cursor);
+  await store.put('_migrated', '1');
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, rawEnv) {
+    let env = rawEnv;
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
     const url = new URL(req.url);
     try {
       if (url.pathname === '/api/health') return json(env, { ok: true });
+      await ensureDb(rawEnv);
+      env = { ...rawEnv, SAVES: new Store(rawEnv.DB) };
 
       if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
         const by = ['score', 'cps', 'asc'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';

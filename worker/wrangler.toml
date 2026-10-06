@@ -8,6 +8,11 @@ compatibility_date = "2025-01-01"
 binding = "SAVES"
 id = "0d777baee6b445b29cc6b6bf9332c1b7"
 
+# Neue Datenbank (D1, kostenlos 100.000 Schreibvorgänge/Tag); wird beim ersten Deploy automatisch angelegt.
+[[d1_databases]]
+binding = "DB"
+database_name = "cookie-clicker-db"
+
 [vars]
 ALLOWED_ORIGIN = "*"
 # Admin-Konten (Namen reserviert). Erste Registrierung nur mit Setup-Code (hier nur der Hash).
