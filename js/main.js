@@ -4,8 +4,9 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift } from './features.js';
-import { skinById } from './extras.js';
+import { renderDaily, renderSkins, renderGift, renderItems } from './features.js';
+import { skinById, itemById, ITEMS } from './extras.js';
+let itemsKey = '';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -74,6 +75,13 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { if (isSpace(e)) { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
 addEventListener('blur', stopHold);
 
+// ---------- Besessene Items unter dem Keks ----------
+let itemBarKey = '';
+function renderItemBar() {
+  const key = game.items.join(); if (key === itemBarKey) return; itemBarKey = key;
+  $('#itemBar').innerHTML = game.items.map((id) => { const it = itemById(id); return `<span title="${it.name} +${it.pct} %">${it.emoji}</span>`; }).join('');
+}
+
 // ---------- Skin & Keks-Regen ----------
 let appliedSkin = '';
 function applySkin() {
@@ -81,7 +89,7 @@ function applySkin() {
   const k = skinById(game.skin); const f = $('#cookieFace');
   f.textContent = k.emoji; f.style.filter = k.filter || ''; f.classList.toggle('rainbow', !!k.cls);
 }
-applySkin();
+applySkin(); renderItemBar();
 let rain = ls.get('cc_rain') === null ? !matchMedia('(prefers-reduced-motion: reduce)').matches : ls.get('cc_rain') === '1';
 setInterval(() => {
   const host = $('#rain'); if (!rain || document.hidden || host.children.length > 14) return;
@@ -235,6 +243,7 @@ function renderModal() {
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
   else if (modalKind === 'daily') renderDaily($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { saveLocal(); $('#dailyBadge').textContent = game.claimableCount() || ''; lastKey = ''; } });
+  else if (modalKind === 'items') renderItems($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { renderItemBar(); applySkin(); saveLocal(); }, buySound: () => sound.shop() });
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
   else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
@@ -246,7 +255,7 @@ function renderSettings() {
   $('#modalBody').innerHTML = `<div class="stack">
     <label>Name deiner Bäckerei<input type="text" id="setName" maxlength="16" value="${esc(game.name)}"></label>
     <div class="rowf"><button id="setTheme">🌓 Design wechseln</button><button id="setPart">✨ Partikel: ${particles ? 'an' : 'aus'}</button><button id="saveNow">💾 Jetzt speichern</button></div>
-    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button></div>
+    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setMusic">${sound.music ? '🎵 Musik: an' : '🎵 Musik: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button></div>
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
@@ -255,6 +264,7 @@ function renderSettings() {
   $('#setPart').addEventListener('click', () => { particles = !particles; ls.set('cc_particles', particles ? '1' : '0'); renderSettings(); });
   $('#setSound').addEventListener('click', () => { sound.setEnabled(!sound.enabled); sound.click(); renderSettings(); });
   $('#testSound').addEventListener('click', async () => { const st = await sound.test(); toast(st === 'running' ? '🔔 Spielt der Ton? Wenn nicht: Lautstärke hochdrehen und den Stummschalter (Klingeln aus) des Geräts prüfen.' : `🔇 Audio blockiert (Status: ${st}). Tippe noch einmal auf den Knopf.`); });
+  $('#setMusic').addEventListener('click', () => { sound.setMusic(!sound.music); renderSettings(); });
   $('#setRain').addEventListener('click', () => { rain = !rain; ls.set('cc_rain', rain ? '1' : '0'); renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
@@ -393,7 +403,7 @@ function frame(now) {
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
-    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); if (modalKind === 'daily') renderModal(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
+    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); if (modalKind === 'daily') renderModal(); if (modalKind === 'items') { const k = ITEMS.map((it) => (game.items.includes(it.id) ? 2 : game.cookies >= it.cost ? 1 : 0)).join(''); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
   if (cloud.loggedIn && cloudT >= 30) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }

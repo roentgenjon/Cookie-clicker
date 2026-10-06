@@ -15,6 +15,7 @@ export const SKINS = [
   { id: 'alien', name: 'Außerirdischer', emoji: '👽', req: '100.000 Upgrades', need: (s) => s.upgrades >= 100000 },
   { id: 'rainbow', name: 'Regenbogenkeks', emoji: '🍪', cls: 'rainbow', req: '150 Erfolge', need: (s) => s.ach >= 150 },
   { id: 'gold', name: 'Goldkeks', emoji: '🌟', req: '1e30 Kekse gebacken', need: (s) => s.totalAll >= 1e30 },
+  { id: 'icetea', name: 'Eistee', emoji: '🥤', req: 'Eistee-Flasche im Shop kaufen', need: (s) => (s.items || []).includes('icetea') },
 ];
 export const skinById = (id) => SKINS.find((k) => k.id === id) || SKINS[0];
 
@@ -44,3 +45,21 @@ export function genTasks(date, baseCps) {
     target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Math.max(10000, Math.round(baseCps * pick(900, 3600))),
   }));
 }
+
+// ---- Item-Shop: einmalige Käufe für Kekse, geben dauerhaft +x % Produktion und Klickertrag ----
+// Items bleiben beim Aufstieg erhalten.
+export const ITEMS = [
+  { id: 'choco', name: 'Schoko-Keks', emoji: '🍪', pct: 15, cost: 1e5 },
+  { id: 'milk', name: 'Glas Milch', emoji: '🥛', pct: 25, cost: 5e6 },
+  { id: 'coffee', name: 'Kaffeetasse', emoji: '☕', pct: 40, cost: 2.5e8 },
+  { id: 'donut', name: 'Donut', emoji: '🍩', pct: 60, cost: 1e10 },
+  { id: 'pizza', name: 'Pizza', emoji: '🍕', pct: 100, cost: 5e11 },
+  { id: 'icecream', name: 'Eisbecher', emoji: '🍨', pct: 150, cost: 2e13 },
+  { id: 'burger', name: 'Burger', emoji: '🍔', pct: 250, cost: 1e15 },
+  { id: 'bubble', name: 'Bubble Tea', emoji: '🧋', pct: 400, cost: 5e17 },
+  { id: 'energy', name: 'Energy-Drink', emoji: '⚡', pct: 600, cost: 1e20 },
+  { id: 'cake', name: 'Goldene Torte', emoji: '🎂', pct: 800, cost: 1e23 },
+  { id: 'icetea', name: 'Eistee-Flasche', emoji: '🥤', pct: 1000, cost: 1e27, best: true },
+];
+export const itemById = (id) => ITEMS.find((i) => i.id === id);
+export const itemMultiplier = (owned) => 1 + owned.reduce((a, id) => a + ((itemById(id) || {}).pct || 0), 0) / 100;
