@@ -191,3 +191,13 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
   dialog{max-height:calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
   .chat-list{height:min(46dvh,420px)}
 }
+
+/* ---- Nachrichten-Banner (wie iMessage) ---- */
+#banners{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(94vw,420px);display:flex;flex-direction:column;gap:8px;z-index:200;pointer-events:none}
+.banner{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:18px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);box-shadow:0 8px 28px #0008;cursor:pointer;animation:bnIn .35s cubic-bezier(.2,1.2,.4,1);transition:opacity .45s,transform .45s}
+.banner.out{opacity:0;transform:translateY(-30px)}
+.bn-i{font-size:1.6rem;background:var(--accent);border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex:none}
+.bn-b{display:flex;flex-direction:column;min-width:0;flex:1}.bn-b b{font-size:.95rem}.bn-b span{font-size:.88rem;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner small{opacity:.5;flex:none}
+@keyframes bnIn{from{transform:translateY(-70px);opacity:0}to{transform:none;opacity:1}}
+#banners{margin:0;padding:0;border:0;background:none;overflow:visible;right:auto;bottom:auto;color:var(--text)}#banners:empty{display:none}

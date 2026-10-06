@@ -212,9 +212,23 @@ modal.addEventListener('close', () => { if (modalKind === 'chat') chat.close(); 
 modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
 document.querySelectorAll('[data-modal]').forEach((b) => b.addEventListener('click', () => openModal(b.dataset.modal)));
 let isAdmin = false; let lastUnread = 0;
-const chat = createChat({ toast, isAdmin: () => isAdmin, onUnread: (n) => { if (n > lastUnread) sound.message(); lastUnread = n; $('#chatBadge').textContent = n ? (n > 9 ? '9+' : n) : ''; } });
+function raiseBanners() { const h = $('#banners'); try { if (h.children.length) { h.hidePopover(); h.showPopover(); } } catch { /* ältere Browser */ } }
+function banner({ title, text, more }) {
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const el = document.createElement('div'); el.className = 'banner';
+  el.innerHTML = `<div class="bn-i">💬</div><div class="bn-b"><b>${esc(title)}</b><span>${esc(String(text).slice(0, 120))}${more > 0 ? ` (+${more})` : ''}</span></div><small>jetzt</small>`;
+  el.addEventListener('click', () => { el.remove(); openModal('chat'); });
+  const host = $('#banners'); host.prepend(el);
+  try { host.hidePopover(); host.showPopover(); } catch { /* ältere Browser */ }
+  while (host.children.length > 3) host.lastChild.remove();
+  setTimeout(() => el.classList.add('out'), 5200); setTimeout(() => el.remove(), 5700);
+  try { if (navigator.vibrate) navigator.vibrate(60); } catch { /* ignore */ }
+  try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification(title, { body: text, tag: 'cc-msg' }); } catch { /* ignore */ }
+}
+document.addEventListener('pointerdown', () => { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignore */ } }, { once: true });
+const chat = createChat({ toast, isAdmin: () => isAdmin, onUnread: (n) => { if (n > lastUnread) sound.message(); lastUnread = n; $('#chatBadge').textContent = n ? (n > 9 ? '9+' : n) : ''; }, onNotify: banner });
 chat.start();
-function openModal(kind) { modalKind = kind; renderModal(); if (!modal.open) modal.showModal(); }
+function openModal(kind) { modalKind = kind; renderModal(); if (!modal.open) modal.showModal(); raiseBanners(); }
 function renderModal() {
   const body = $('#modalBody'); const t = $('#modalTitle');
   if (modalKind === 'stats') {
