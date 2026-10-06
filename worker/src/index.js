@@ -48,12 +48,17 @@ async function authenticate(env, b, { allowNew = false } = {}) {
 }
 
 // ---- erlaubte Ereignisse (für Admin → Spieler) ----
+// log10 einer Zahl oder eines Textes wie "1.5e+500" (NaN bei Ungültigem); das Spiel reicht bis 9,99e999
+const logOf = (v) => { if (typeof v === 'number') return v > 0 ? Math.log10(v) : NaN; const t = /^\s*(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(String(v)); return t && Number(t[1]) > 0 ? Math.log10(Number(t[1])) + (t[2] ? Number(t[2]) : 0) : NaN; };
 const num = (v, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null; };
 function cleanEvent(e) {
   if (!e || typeof e !== 'object') return null;
   switch (e.type) {
     case 'golden': { const count = num(e.count, 1, 30); return ['random', 'frenzy', 'lucky', 'click', 'jackpot'].includes(e.effect) && count ? { type: 'golden', effect: e.effect, count: Math.floor(count) } : null; }
-    case 'cookies': { const amount = num(e.amount, -1e300, 1e300); return amount === null ? null : { type: 'cookies', amount }; }
+    case 'cookies': { // Menge als Zahl oder als Text wie "-1.5e+500" (Spiel reicht bis 9,99e999)
+      if (typeof e.amount === 'string') { const t = /^\s*(-?)(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(e.amount); if (!t) return null; const ex = t[3] ? Number(t[3]) : 0; if (!(Number(t[2]) > 0) || ex > 999 || ex < -5) return null; return { type: 'cookies', amount: `${t[1]}${t[2]}e${ex}` }; }
+      const amount = num(e.amount, -1e300, 1e300); return amount === null ? null : { type: 'cookies', amount };
+    }
     case 'chips': { const amount = num(e.amount, 1, 1e9); return amount ? { type: 'chips', amount: Math.floor(amount) } : null; }
     case 'building': { const b = num(e.b, 0, 14), amount = num(e.amount, 1, 100000); return b !== null && amount ? { type: 'building', b: Math.floor(b), amount: Math.floor(amount) } : null; }
     case 'buff': { const mult = num(e.mult, 1, 1e6), seconds = num(e.seconds, 1, 3600); return ['frenzy', 'click'].includes(e.kind) && mult && seconds ? { type: 'buff', kind: e.kind, mult, seconds } : null; }
@@ -99,7 +104,8 @@ async function listPlayers(env) {
   const list = await env.SAVES.list({ prefix: 'p:', limit: 1000 });
   const bans = new Set((await env.SAVES.list({ prefix: 'ban:', limit: 1000 })).keys.map((k) => k.name.slice(4)));
   const mutes = new Set((await env.SAVES.list({ prefix: 'mute:', limit: 1000 })).keys.map((k) => k.name.slice(5)));
-  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, cps: k.metadata.c || 0, asc: k.metadata.a || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
+  const lg = (l, v) => (Number.isFinite(l) ? l : v > 0 ? Math.log10(v) : -1); // log10-Werte für Zahlen über 1e300
+  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, sl: lg(k.metadata.sl, k.metadata.s), cps: k.metadata.c || 0, cl: lg(k.metadata.cl, k.metadata.c), asc: k.metadata.a || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
 }
 
 async function admin(env, b) {
@@ -262,10 +268,11 @@ export default {
 
       if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
         const by = ['score', 'cps', 'asc'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';
-        const ranked = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y[by] - x[by]);
-        const players = ranked.slice(0, 25).map((p) => ({ name: p.name, score: p.score, value: p[by] }));
+        const key = by === 'score' ? 'sl' : by === 'cps' ? 'cl' : 'asc';
+        const ranked = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y[key] - x[key]);
+        const players = ranked.slice(0, 25).map((p) => ({ name: p.name, score: p.score, value: p[by], vl: key === 'asc' ? undefined : p[key] }));
         const myId = url.searchParams.get('id'); let me = null;
-        if (myId && ID_RE.test(myId)) { const i = ranked.findIndex((p) => p.id === myId); if (i >= 0) me = { rank: i + 1, name: ranked[i].name, value: ranked[i][by] }; }
+        if (myId && ID_RE.test(myId)) { const i = ranked.findIndex((p) => p.id === myId); if (i >= 0) me = { rank: i + 1, name: ranked[i].name, value: ranked[i][by], vl: key === 'asc' ? undefined : ranked[i][key] }; }
         return json(env, { players, me, by, total: ranked.length });
       }
 
@@ -285,15 +292,15 @@ export default {
         const target = await env.SAVES.getWithMetadata('p:' + toId, 'text');
         if (!target.value) return fail(env, 'Spieler nicht gefunden', 404);
         if (await env.SAVES.get('ban:' + toId)) return fail(env, 'Dieser Spieler kann nichts empfangen.');
-        const amount = Number(b.amount);
-        if (!Number.isFinite(amount) || amount < 1) return fail(env, 'Ungültiger Betrag');
-        const saved = Number((au.rec.data || {}).cookies) || 0;
-        if (amount > saved * 0.5) return fail(env, 'Du kannst höchstens die Hälfte deiner Kekse verschenken.');
+        const aLog = logOf(b.amount);
+        if (!Number.isFinite(aLog) || aLog < 0 || aLog > 999.99) return fail(env, 'Ungültiger Betrag');
+        const sLog = logOf((au.rec.data || {}).cookies);
+        if (!Number.isFinite(sLog) || aLog > sLog + Math.log10(0.5) + 1e-9) return fail(env, 'Du kannst höchstens die Hälfte deiner Kekse verschenken.');
         const key = `gift:${b.id}:${today()}`; const used = Number(await env.SAVES.get(key)) || 0;
         if (used >= 5) return fail(env, 'Heute hast du schon 5 Geschenke gemacht.', 429);
         await env.SAVES.put(key, String(used + 1), { expirationTtl: 60 * 60 * 48 });
         const meta = (await env.SAVES.getWithMetadata('p:' + b.id, 'text')).metadata || {};
-        await pushEvent(env, toId, { type: 'cookies', amount, gift: true }, meta.n || 'Jemand');
+        await pushEvent(env, toId, { type: 'cookies', amount: typeof b.amount === 'string' ? b.amount.trim() : Number(b.amount), gift: true }, meta.n || 'Jemand');
         return json(env, { ok: true, left: 4 - used, to: (target.metadata || {}).n });
       }
 
@@ -314,7 +321,7 @@ export default {
         const score = Number(b.score);
         const s = Number.isFinite(score) && score > 0 ? score : 0;
         const st = b.stats || {}; const c = Number(st.cps), asc = Number(st.asc);
-        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
+        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, sl: Number.isFinite(Number(st.sl)) ? Math.min(1100, Math.max(0, Number(st.sl))) : undefined, cl: Number.isFinite(Number(st.cl)) ? Math.min(1100, Math.max(0, Number(st.cl))) : undefined, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
         return json(env, { ok: true });
       }
 

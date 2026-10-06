@@ -1,4 +1,5 @@
 // Keks-Skins und tägliche Aufgaben (reine Daten/Logik, ohne DOM).
+import { geoCost, geoMax } from './big.js';
 
 // need(s): s = { ach, golden, totalAll, ascensions, upgrades, buildings, clicks, chips }
 export const SKINS = [
@@ -42,7 +43,7 @@ export function genTasks(date, baseCps) {
   const pick = (a, b) => Math.floor(a + rnd() * (b - a + 1));
   return types.slice(0, 3).map((type) => ({
     type,
-    target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Math.max(10000, Math.round(baseCps * pick(900, 3600))),
+    target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Math.min(1e300, Math.max(10000, Math.round(baseCps * pick(900, 3600)))),
   }));
 }
 
@@ -66,11 +67,8 @@ export const ITEMS = [
 export const itemById = (id) => ITEMS.find((i) => i.id === id);
 // owned = { id: Anzahl }
 export const itemMultiplier = (owned) => 1 + ITEMS.reduce((a, it) => a + it.pct * (owned[it.id] || 0), 0) / 100;
-export const itemCost = (it, have, n = 1) => it.cost * Math.pow(ITEM_GROWTH, have) * (Math.pow(ITEM_GROWTH, n) - 1) / (ITEM_GROWTH - 1);
-export function itemMaxAffordable(it, have, cookies) {
-  const n = Math.floor(Math.log(1 + (cookies * (ITEM_GROWTH - 1)) / (it.cost * Math.pow(ITEM_GROWTH, have))) / Math.log(ITEM_GROWTH));
-  return Math.max(0, n);
-}
+export const itemCost = (it, have, n = 1) => geoCost(it.cost, ITEM_GROWTH, have, n);
+export const itemMaxAffordable = (it, have, cookies) => geoMax(it.cost, ITEM_GROWTH, have, cookies);
 
 // ---- Sound-Shop: Klang-Pakete und Musikstücke, einmalig für Kekse kaufen ----
 export const SOUND_PACKS = [

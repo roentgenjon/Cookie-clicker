@@ -2,6 +2,7 @@
 // Zusammen mit den 400.000 normalen Upgrades ergibt das genau 10^16 = 10.000.000.000.000.000 Upgrades.
 // Die Stufen werden nicht gespeichert, sondern nur der Fortschritt je Reihe (100 Zahlen) – alles andere ist Mathematik.
 import { BUILDINGS, TOTAL_UPGRADES } from './data.js';
+import { Big, geoCost, geoMax } from './big.js';
 
 export const SERIES_COUNT = 100;
 export const TOTAL_TARGET = 10n ** 16n; // gewünschte Gesamtzahl
@@ -31,12 +32,8 @@ for (let i = 0; i < 5; i++) SERIES.push({ kind: 'global', name: `Backstuben-Refo
 export const seriesDesc = (s) => (s.kind === 'bld' ? `${s.name}: Produktion +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe` : s.kind === 'click' ? `Klickstärke +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe` : `Gesamte Produktion +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe`);
 export const seriesNeedText = (s) => (s.kind === 'bld' ? `${s.need} × ${BUILDINGS[s.b].name} besitzen` : `${s.baked.toExponential(0).replace('e+', 'e')} Kekse insgesamt gebacken`);
 
-// Preis für n Stufen, wenn schon `have` gekauft sind (geometrische Reihe)
-export const seriesCost = (s, have, n = 1) => s.base * Math.pow(s.g, have) * (Math.pow(s.g, n) - 1) / (s.g - 1);
-export function seriesMaxAffordable(s, have, cookies) {
-  const first = s.base * Math.pow(s.g, have);
-  if (!Number.isFinite(first) || first <= 0) return 0;
-  const n = Math.floor(Math.log(1 + (cookies * (s.g - 1)) / first) / Math.log(s.g));
-  return Math.max(0, Math.min(n, SERIES_LEVELS - have));
-}
-export const seriesFactor = (s, n) => Math.min(1e300, Math.pow(1 + s.e, n)); // Gesamtwirkung von n Stufen
+// Preis für n Stufen, wenn schon `have` gekauft sind (geometrische Reihe) – als Big, da die Preise weit über 1e308 steigen
+export const seriesCost = (s, have, n = 1) => geoCost(s.base, s.g, have, n);
+export const seriesMaxAffordable = (s, have, cookies) => geoMax(s.base, s.g, have, cookies, SERIES_LEVELS - have);
+export const seriesLog = (s, n) => n * Math.log10(1 + s.e); // log10 der Gesamtwirkung von n Stufen
+export const seriesFactor = (s, n) => Big.fromLog(seriesLog(s, n));

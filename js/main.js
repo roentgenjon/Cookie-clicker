@@ -1,4 +1,5 @@
-import { BUILDINGS, upgrade, TOTAL_UPGRADES, KIND, K, fmtShort } from './data.js';
+import { BUILDINGS, upgrade, TOTAL_UPGRADES, KIND, K } from './data.js';
+import { Big, fmtBig } from './big.js';
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
@@ -11,7 +12,7 @@ let itemsKey = ''; let megaKey = '';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = (n) => (!Number.isFinite(n) ? '∞' : n < 1e6 ? (n < 100 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString('de-DE')).replace(/\.0$/, '') : fmtShort(n));
+const fmt = fmtBig; // Zahlen und Big-Werte (bis 9,99e999)
 const fmtTime = (s) => { s = Math.floor(s); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `${d ? d + 'd ' : ''}${h ? h + 'h ' : ''}${m}m ${s % 60}s`; };
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 
@@ -36,7 +37,7 @@ const KEY = 'cookie_clicker_save_v1';
 function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(game.serialize())); } catch { /* ignore */ } }
 function loadLocal() {
   const raw = ls.get(KEY); if (!raw) return;
-  try { const d = JSON.parse(raw); localLast = d.last || 0; const r = game.load(d); if (r.gain > 0) toast(`Willkommen zurück! Offline (${fmtTime(r.offlineSecs)}) gebacken: <b>${fmt(r.gain)}</b> Kekse`); } catch (e) { console.error(e); }
+  try { const d = JSON.parse(raw); localLast = d.last || 0; const r = game.load(d); if (!r.gain.isZero()) toast(`Willkommen zurück! Offline (${fmtTime(r.offlineSecs)}) gebacken: <b>${fmt(r.gain)}</b> Kekse`); } catch (e) { console.error(e); }
 }
 loadLocal();
 $('#bakeryName').textContent = game.name;
@@ -98,7 +99,7 @@ applySkin(); renderItemBar();
 let rain = ls.get('cc_rain') === null ? !matchMedia('(prefers-reduced-motion: reduce)').matches : ls.get('cc_rain') === '1';
 setInterval(() => {
   const host = $('#rain'); if (!rain || document.hidden || host.children.length > 14) return;
-  if (Math.random() > Math.min(1, 0.3 + Math.log10(1 + game.cps) / 20)) return;
+  if (Math.random() > Math.min(1, 0.3 + Math.max(0, game.cps.log10()) / 20)) return;
   const s = document.createElement('span'); s.textContent = skinById(game.skin).emoji;
   s.style.left = Math.random() * 96 + '%'; s.style.fontSize = 14 + Math.random() * 18 + 'px'; s.style.animationDuration = 7 + Math.random() * 7 + 's';
   s.addEventListener('animationend', () => s.remove()); host.append(s);
@@ -137,7 +138,7 @@ function renderShop() {
   shopRows.forEach((row, i) => {
     const n = amount === 'max' ? Math.max(1, game.maxAffordable(i)) : amount;
     const cost = game.buildingCost(i, n);
-    const can = cost <= game.cookies;
+    const can = cost.lte(game.cookies);
     row.className = 'row ' + (can ? 'can' : 'cant');
     const co = row.querySelector('.co'); co.className = 'co' + (can ? ' can' : '');
     co.textContent = `🍪 ${fmt(cost)}${n > 1 ? ` (×${n})` : ''}`;
@@ -184,8 +185,8 @@ document.addEventListener('mouseover', (e) => {
   const up = e.target.closest('.up'); const row = e.target.closest('#shop .row');
   if (up) { const u = upgrade(+up.dataset.id); showTip(`<b>${esc(u.name)}</b><br>${esc(u.desc)}<br><span class="mu">${u.kind === 'heaven' ? '😇 ' + fmt(u.cost) + ' Chips' : '🍪 ' + fmt(u.cost)}</span>`, e); }
   else if (row) {
-    const i = +row.dataset.i, b = BUILDINGS[i], per = b.cps * game.tierMult[i] * game.globalMult * (1 + 0.01 * game.chipsEarned);
-    showTip(`<b>${b.name}</b> (${game.owned[i]})<br>Jedes erzeugt ca. ${fmt(per)} Kekse/s<br>Gesamt: ${fmt(per * game.owned[i])}/s<br><span class="mu">Rechtsklick: verkaufen (50 %)</span>`, e);
+    const i = +row.dataset.i, b = BUILDINGS[i], per = Big.from(b.cps).mulLog(game.tierLog[i] + game.globalLog).mulN(1 + 0.01 * game.chipsEarned);
+    showTip(`<b>${b.name}</b> (${game.owned[i]})<br>Jedes erzeugt ca. ${fmt(per)} Kekse/s<br>Gesamt: ${fmt(per.mulN(game.owned[i]))}/s<br><span class="mu">Rechtsklick: verkaufen (50 %)</span>`, e);
   }
 });
 document.addEventListener('mousemove', (e) => { if (!tip.classList.contains('hidden')) { if (e.target.closest('.up') || e.target.closest('#shop .row')) moveTip(e); else hideTip(); } });
@@ -233,7 +234,7 @@ function renderModal() {
   const body = $('#modalBody'); const t = $('#modalTitle');
   if (modalKind === 'stats') {
     t.textContent = '📊 Statistik';
-    const all = game.totalReset + game.total;
+    const all = game.totalReset.add(game.total);
     body.innerHTML = `<div class="kv">
       <span>Kekse auf der Bank</span><span>${fmt(game.cookies)}</span>
       <span>Gebacken (diese Runde)</span><span>${fmt(game.total)}</span>
@@ -334,17 +335,17 @@ async function loadLb(by = lbBy) {
   lbBy = by; const box = $('#lb'); if (!box) return;
   try {
     const r = await cloud.leaderboard(by);
-    const val = (v) => (by === 'asc' ? Math.floor(v).toLocaleString('de-DE') : fmt(v));
+    const val = (v, vl) => (by === 'asc' ? Math.floor(v).toLocaleString('de-DE') : fmt(Number.isFinite(vl) && vl > 300 ? Big.fromLog(vl) : v));
     const tabs = `<div class="lb-tabs">${Object.entries(LB).map(([k, t]) => `<button data-by="${k}" class="${k === by ? 'on' : ''}">${t}</button>`).join('')}</div>`;
-    const rows = r.players.map((p, i) => `<tr class="${cloud.loggedIn && p.name === cloud.name ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(p.name)}</td><td>${val(p.value)}</td></tr>`).join('');
-    const mine = r.me ? `<div class="note">🎯 Dein Platz: <b>#${r.me.rank}</b> von ${r.total} (${val(r.me.value)})</div>` : '';
+    const rows = r.players.map((p, i) => `<tr class="${cloud.loggedIn && p.name === cloud.name ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(p.name)}</td><td>${val(p.value, p.vl)}</td></tr>`).join('');
+    const mine = r.me ? `<div class="note">🎯 Dein Platz: <b>#${r.me.rank}</b> von ${r.total} (${val(r.me.value, r.me.vl)})</div>` : '';
     box.innerHTML = tabs + (r.players.length ? `<table class="lb"><tr><th>#</th><th>Bäckerei</th><th>${LB[by]}</th></tr>${rows}</table>` : '<div class="note">Noch keine Einträge.</div>') + mine;
     box.querySelectorAll('[data-by]').forEach((b) => b.addEventListener('click', () => loadLb(b.dataset.by)));
   } catch (e) { box.textContent = '❌ ' + e.message; }
 }
 function cloudSave(keepalive = false, setup) {
   if (banned || Date.now() < limitUntil) return Promise.resolve();
-  return cloud.save(game.serialize(), game.totalReset + game.total, keepalive, setup, { cps: game.baseCps, asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
+  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
 let banned = false; let lastHideSave = 0; let limitUntil = 0;
 function onBanned() { if (banned) return; banned = true; toast('🚫 Dein Konto wurde gesperrt. Dein Fortschritt wird nicht mehr gespeichert.'); }
@@ -400,7 +401,7 @@ updateCloudBtn();
   startEvents(); checkAdmin();
   try {
     const r = await cloud.load();
-    if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (o.gain > 0) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
+    if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (!o.gain.isZero()) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
   } catch (e) { if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
 })();
 
@@ -410,7 +411,7 @@ function frame(now) {
   const dt = Math.min(1, (now - prev) / 1000); prev = now;
   // Tab war im Hintergrund/Gerät im Standby: verpasste Zeit gutschreiben
   const wall = Date.now(); const gap = (wall - lastWall) / 1000; lastWall = wall;
-  if (gap > 3) { const r = game.catchUp(gap - dt); if (r.gain > 0) toast(`😴 Während du weg warst (${fmtTime(r.offlineSecs)}): <b>+${fmt(r.gain)}</b> Kekse`); }
+  if (gap > 3) { const r = game.catchUp(gap - dt); if (!r.gain.isZero()) toast(`😴 Während du weg warst (${fmtTime(r.offlineSecs)}): <b>+${fmt(r.gain)}</b> Kekse`); }
   game.tick(dt);
   $('#cookies').textContent = fmt(game.cookies);
   $('#cps').textContent = fmt(game.cps);
