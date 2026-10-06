@@ -63,6 +63,11 @@ export const cloud = {
   admin(action, extra = {}) { return post('/api/admin', 'POST', { id: this.id, secret: this.secret, action, ...extra }); },
   load() { return post('/api/load', 'POST', { id: this.id, secret: this.secret }); },
   chat() { return req('/api/chat'); },
+  // Private Chats
+  dmList() { return post('/api/dm/list', 'POST', { id: this.id, secret: this.secret }); },
+  dmOpen(to) { return post('/api/dm/open', 'POST', { id: this.id, secret: this.secret, to }); },
+  dmGet(other) { return post('/api/dm/get', 'POST', { id: this.id, secret: this.secret, with: other }); },
+  dmSend(other, text) { return post('/api/dm/send', 'POST', { id: this.id, secret: this.secret, with: other, text }); },
   chatSend(text) { return post('/api/chat/send', 'POST', { id: this.id, secret: this.secret, text }); },
   leaderboard(by = 'score') { return req(`/api/leaderboard?by=${by}&id=${this.id || ''}`); },
   players() { return req('/api/players'); },
