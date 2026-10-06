@@ -135,7 +135,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return `
         <div class="adm-sec"><h4>🔎 Spielstand</h4><button data-act="inspect">📋 Spielstand ansehen</button>${info ? `<pre>${esc(info)}</pre>` : ''}</div>
         <div class="adm-sec"><h4>🔇 Chat</h4><div class="adm-btns wrap"><button data-act="mute" data-min="10">10 Min stumm</button><button data-act="mute" data-min="60">1 Std stumm</button><button data-act="mute" data-min="1440">24 Std stumm</button><button data-act="mute" data-min="0">${cur && cur.muted ? '🔊 Stumm aufheben' : 'Stumm aufheben'}</button></div><small class="adm-small">Stumme Spieler können im Chat nicht schreiben. Einzelne Nachrichten löschst du direkt im Chat mit 🗑️.</small></div>
-        <div class="adm-sec"><h4>🚫 Zugang</h4><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button><small class="adm-small">Gesperrte Spieler können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
+        <div class="adm-sec"><h4>🚫 Zugang</h4><label class="fld"><span>Bann-Nachricht (wird dem Spieler auf dem schwarzen Bildschirm angezeigt)</span><textarea id="banMsg" rows="2" maxlength="300" placeholder="z. B. Beleidigungen im Chat"></textarea></label><div class="adm-btns wrap"><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button>${cur && cur.banned ? '<button data-act="banmsg">💾 Nachricht ändern</button>' : ''}</div><small class="adm-small">Gesperrte Spieler sehen einen schwarzen Bildschirm mit „Du wurdest gebannt“ und deiner Nachricht, können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
         <div class="adm-sec danger-zone"><h4>⚠️ Gefahrenzone</h4><div class="adm-btns wrap"><button class="danger" data-act="reset">♻️ Spielstand zurücksetzen</button><button class="danger" data-act="del">🗑️ Konto löschen</button></div></div>`;
       }
     }
@@ -241,7 +241,13 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       }
       case 'ban': {
         const p = players.find((x) => x.id === sel);
-        try { await call('ban', { target: sel, banned: !p.banned }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
+        const reason = (root.querySelector('#banMsg') || {}).value || '';
+        try { await call('ban', { target: sel, banned: !p.banned, reason }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
+        return paint();
+      }
+      case 'banmsg': {
+        const p = players.find((x) => x.id === sel); const reason = (root.querySelector('#banMsg') || {}).value || '';
+        try { await call('ban', { target: sel, banned: true, reason }); say(`Bann-Nachricht für ${p.name} geändert`); } catch { return; }
         return paint();
       }
       case 'reset': {

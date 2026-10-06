@@ -317,7 +317,7 @@ async function renderCloud() {
         if (r.isNew) { game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
         else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
         $('#bakeryName').textContent = game.name; updateCloudBtn(); checkAdmin(); startEvents(); modal.close();
-      } catch (err) { if (err.data && err.data.banned) { showBanScreen(); return; } msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
+      } catch (err) { if (err.data && err.data.banned) { showBanScreen(err.data.reason || ''); return; } msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
     });
   } else {
     body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.</p>
@@ -345,20 +345,21 @@ async function loadLb(by = lbBy) {
 }
 function cloudSave(keepalive = false, setup) {
   if (banned || Date.now() < limitUntil) return Promise.resolve();
-  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
+  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(e.data.reason); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
 let banned = false; let lastHideSave = 0; let limitUntil = 0;
 // Bann: schwarzer Bildschirm über allem (auch über offenen Fenstern), keine Bedienung, kein Abmelden. Das Merkmal bleibt nach Neuladen erhalten und wird beim Start geprüft.
-function showBanScreen() {
-  banned = true; try { if (modal.open) modal.close(); } catch { /* egal */ }
+function showBanScreen(reason) {
+  banned = true; if (typeof reason === 'string') { if (reason) ls.set('cc_ban_reason', reason); else ls.del('cc_ban_reason'); }
+  $('#banReason').textContent = ls.get('cc_ban_reason') || ''; try { if (modal.open) modal.close(); } catch { /* egal */ }
   const el = $('#banScreen'); try { el.hidePopover(); } catch { /* egal */ } try { el.showPopover(); } catch { el.style.display = 'flex'; }
   document.title = 'Gebannt';
 }
-function onBanned() { if (banned) return; if (cloud.loggedIn) ls.set('cc_banned', '1'); showBanScreen(); }
+function onBanned(reason) { if (banned) { if (reason) showBanScreen(reason); return; } if (cloud.loggedIn) ls.set('cc_banned', '1'); showBanScreen(reason || ''); }
 ['keydown', 'keyup', 'pointerdown', 'click', 'contextmenu'].forEach((t) => document.addEventListener(t, (e) => { if (banned) { e.preventDefault(); e.stopImmediatePropagation(); } }, true));
 if (ls.get('cc_banned') === '1') {
-  if (cloud.loggedIn) { showBanScreen(); cloud.events(0).then(() => { ls.del('cc_banned'); location.reload(); }).catch((e) => { if (e.status === 404 || (e.status === 403 && !(e.data && e.data.banned))) { ls.del('cc_banned'); location.reload(); } }); }
-  else ls.del('cc_banned');
+  if (cloud.loggedIn) { showBanScreen(); cloud.events(0).then(() => { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); }).catch((e) => { if (e.data && e.data.banned) showBanScreen(e.data.reason || ''); else if (e.status === 404 || (e.status === 403 && !(e.data && e.data.banned))) { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); } }); }
+  else { ls.del('cc_banned'); ls.del('cc_ban_reason'); }
 }
 
 // ---------- Eingeblendete Admin-Nachrichten (bleiben, bis man sie schließt) ----------
@@ -387,7 +388,7 @@ async function pollEvents() {
     for (const ev of r.events || []) handleEvent(ev, ev.from);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
     if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
-  } catch (e) { if (e.data && e.data.banned) onBanned(); }
+  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason); }
 }
 let evTimer = null;
 function startEvents() {
@@ -413,7 +414,7 @@ updateCloudBtn();
   try {
     const r = await cloud.load();
     if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (!o.gain.isZero()) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
-  } catch (e) { if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
+  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason); else if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
 })();
 
 // ---------- Hauptschleife ----------

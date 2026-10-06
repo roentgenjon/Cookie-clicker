@@ -209,3 +209,4 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 #banScreen h1{font-size:clamp(1.8rem,6vw,3.4rem);margin:.3em 0;color:#ff4d4d}
 #banScreen p{font-size:clamp(1rem,2.6vw,1.3rem);opacity:.8;line-height:1.5}
 .ban-i{font-size:clamp(4rem,14vw,8rem)}
+#banScreen .ban-reason{margin:.4em auto 1em;max-width:min(88vw,560px);padding:.7em 1em;border-left:4px solid #ff4d4d;background:#ffffff14;border-radius:8px;font-style:italic;white-space:pre-wrap;word-break:break-word;opacity:1}#banScreen .ban-reason:empty{display:none}
