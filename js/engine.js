@@ -3,6 +3,9 @@ import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemM
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
+// Obergrenze für alle Zahlen: verhindert Überlauf zu Infinity/NaN (JS-Zahlen enden bei ~1,8e308)
+export const NUM_CAP = 1e300;
+const cap = (x) => (x < NUM_CAP ? x : NUM_CAP);
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
 const toB64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s); };
@@ -141,9 +144,9 @@ export class Game {
       if (!this.owned[b]) continue;
       let syn = 1; const w = this.synW[b];
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
-      sum += BUILDINGS[b].cps * this.owned[b] * this.tierMult[b] * syn;
+      sum = cap(sum + cap(BUILDINGS[b].cps * this.owned[b] * cap(this.tierMult[b]) * cap(syn)));
     }
-    this.baseCps = sum * this.globalMult * (1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * this.itemMult;
+    this.baseCps = cap(cap(sum * cap(this.globalMult)) * (1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * cap(this.itemMult));
   }
   get itemMult() { return itemMultiplier(this.items); }
   // ---- Sound-Shop ----
@@ -169,8 +172,8 @@ export class Game {
     return n;
   }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
-  get cps() { return this.baseCps * this.buffMult('frenzy'); }
-  get clickValue() { return (this.clickMult + this.baseCps * this.clickPct) * this.buffMult('click') * this.itemMult; }
+  get cps() { return cap(this.baseCps * this.buffMult('frenzy')); }
+  get clickValue() { return cap(cap(cap(this.clickMult) + this.baseCps * this.clickPct) * this.buffMult('click') * cap(this.itemMult)); }
 
   // ---- Gebäude ----
   buildingCost(i, amount = 1, owned = this.owned[i]) {
@@ -192,7 +195,7 @@ export class Game {
   }
   sellBuilding(i) {
     if (this.owned[i] <= 0) return false;
-    this.owned[i]--; this.cookies += this.buildingCost(i, 1) * 0.5;
+    this.owned[i]--; this.cookies = cap(this.cookies + this.buildingCost(i, 1) * 0.5);
     this.updateCps();
     return true;
   }
@@ -244,7 +247,7 @@ export class Game {
   }
 
   // ---- Aktionen ----
-  earn(x) { this.cookies += x; this.total += x; this.daily.prog.baked += x; }
+  earn(x) { x = cap(x); this.cookies = cap(this.cookies + x); this.total = cap(this.total + x); this.daily.prog.baked = cap(this.daily.prog.baked + x); }
   click() { const v = this.clickValue; this.earn(v); this.clicks++; this.daily.prog.clicks++; return v; }
 
   // ---- Tägliche Aufgaben & Skins ----
@@ -260,12 +263,12 @@ export class Game {
   claimableCount() { return this.dailyState().filter((t) => t.done && !t.claimed).length; }
   claimDaily(i) {
     const t = this.dailyState()[i]; if (!t || !t.done || t.claimed) return null;
-    const reward = this.dailyRewardCookies(); this.cookies += reward; this.daily.claimed.push(i);
+    const reward = this.dailyRewardCookies(); this.cookies = cap(this.cookies + reward); this.daily.claimed.push(i);
     let bonus = null;
     if (this.daily.claimed.length >= this.daily.tasks.length && this.daily.lastDone !== dayKey()) {
       this.daily.streak = this.daily.lastDone === yesterdayKey() ? this.daily.streak + 1 : 1; this.daily.lastDone = dayKey();
       for (let k = 0; k < 3; k++) this.spawnGolden(null);
-      bonus = this.dailyRewardCookies() * 3; this.cookies += bonus;
+      bonus = this.dailyRewardCookies() * 3; this.cookies = cap(this.cookies + bonus);
     }
     return { reward, bonus };
   }
@@ -320,7 +323,7 @@ export class Game {
   applyEvent(ev) {
     switch (ev.type) {
       case 'golden': for (let i = 0; i < ev.count; i++) this.spawnGolden(ev.effect === 'random' ? null : ev.effect); return `${ev.count}× goldener Keks erscheint!`;
-      case 'cookies': this.cookies = Math.max(0, this.cookies + ev.amount); return ev.amount >= 0 ? 'Du bekommst Kekse geschenkt!' : 'Dir wurden Kekse abgezogen.';
+      case 'cookies': this.cookies = cap(Math.max(0, this.cookies + ev.amount)); return ev.amount >= 0 ? 'Du bekommst Kekse geschenkt!' : 'Dir wurden Kekse abgezogen.';
       case 'chips': this.chipsEarned += ev.amount; this.updateCps(); return `+${ev.amount} Himmelschips!`;
       case 'building': this.owned[ev.b] += ev.amount; this.updateCps(); return `+${ev.amount}× ${BUILDINGS[ev.b].name}!`;
       case 'buff': this.buffs.push({ type: ev.kind, mult: ev.mult, until: Date.now() + ev.seconds * 1000 }); return `${ev.kind === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${ev.mult} für ${ev.seconds} s!`;
@@ -343,7 +346,7 @@ export class Game {
   ascend() {
     const gain = this.chipsGain;
     if (gain < 1) return false;
-    this.totalReset += this.total; this.chipsEarned += gain; this.ascensions++;
+    this.totalReset = cap(this.totalReset + this.total); this.chipsEarned += gain; this.ascensions++;
     this.cookies = 0; this.total = 0;
     this.owned.fill(0);
     this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);

@@ -115,3 +115,13 @@ const baN = ba.buyAllSeries(); assert.ok(baN > 100, `Mega-Stufen gekauft: ${baN}
 assert.ok(ba.series.filter((n) => n > 0).length > 20, 'verteilt auf viele Reihen');
 const bb = new Game(); bb.cookies = 5; assert.equal(bb.buyAllSeries(), 0);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toExponential(2));
+
+// Überlauf: nie Infinity/NaN
+{
+  const g = new Game(); g.globalMult = 1e300; g.clickMult = 1e300; g.tierMult.fill(1e300); g.owned.fill(1e6); g.items = { }; g.updateCps();
+  for (let i = 0; i < 5; i++) g.earn(g.cps * 1e6);
+  g.click();
+  for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) if (!Number.isFinite(v)) throw new Error('Überlauf: ' + v);
+  const g2 = new Game(); g2.load(JSON.parse(JSON.stringify(g.serialize()))); if (!Number.isFinite(g2.cookies) || g2.cookies < 1e290) throw new Error("Laden: " + g2.cookies);
+  console.log('Überlauf-Test OK');
+}
