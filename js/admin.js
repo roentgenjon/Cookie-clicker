@@ -29,6 +29,19 @@ const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === se
 
 const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
 const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls'];
+// Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
+export function parseDur(txt) {
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*([a-zäöü]*)\s*$/i.exec(String(txt));
+  if (!m) return NaN;
+  const n = Number(m[1].replace(',', '.')); const u = m[2].toLowerCase();
+  const f = !u || /^(m|min|minute|minuten)$/.test(u) ? 1 : /^(h|std|stunde|stunden)$/.test(u) ? 60 : /^(d|t|tag|tage|tagen)$/.test(u) ? 1440 : /^(w|woche|wochen)$/.test(u) ? 10080 : NaN;
+  return Math.round(n * f);
+}
+// Minuten -> "1 Std 30 Min" / "3 Tage"
+export function fmtDur(m) {
+  if (!m) return '–'; const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mi = m % 60;
+  return [d && `${d} Tag${d > 1 ? 'e' : ''}`, h && `${h} Std`, mi && `${mi} Min`].filter(Boolean).join(' ');
+}
 const POLL_DURATIONS = [[0, 'Ohne Ende'], [60, '1 Stunde'], [1440, '24 Stunden'], [10080, '7 Tage'], [43200, '30 Tage']];
 const DURATIONS = [[0, 'Dauerhaft'], [60, '1 Stunde'], [360, '6 Stunden'], [1440, '24 Stunden'], [10080, '7 Tage'], [43200, '30 Tage']]; // gelten nicht für einen einzelnen Spieler
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -86,7 +99,9 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadAdmins() { try { adminData = await cloud.admin('adminList'); } catch (e) { adminData = { error: e.message }; } }
   const online = (p) => !!p.online;
   const ago = (t) => new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const durText = (m) => (m ? (DURATIONS.find(([v]) => v === m) || [0, m + ' Min'])[1] : 'dauerhaft');
+  const durText = (m) => (m ? fmtDur(m) : 'dauerhaft');
+  // Dauer aus Auswahl und freiem Feld (das freie Feld gewinnt); null = ungültige Eingabe
+  const pickDur = (sel, custom) => { const c = ((root.querySelector(custom) || {}).value || '').trim(); if (c) { const m = parseDur(c); return m > 0 && m <= 525600 ? m : null; } return +((root.querySelector(sel) || {}).value || 0); };
   function paneHtml() {
     const all = sel === ALL;
     switch (tab) {
@@ -133,7 +148,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return `<div class="adm-hint">Erstellt eine Umfrage für <b>alle Spieler</b>. Sie bekommen einen Hinweis und stimmen im Fenster „📊 Umfragen“ ab. Es bleiben die letzten 20 Umfragen gespeichert.</div>
         ${fld('Frage', '<input type="text" id="pq" maxlength="140" placeholder="z. B. Welches Update wollt ihr als Nächstes?">')}
         ${fld('Antworten (eine pro Zeile, 2 bis 6)', '<textarea id="po" rows="4" maxlength="400" placeholder="Auto-Kauf&#10;Gilden&#10;Neue goldene Kekse"></textarea>')}
-        ${fld('Dauer', `<select id="pd">${POLL_DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`)}
+        <div class="adm-grid">${fld('Dauer', `<select id="pd">${POLL_DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`)}${fld('Eigene Dauer', '<input type="text" id="pdC" maxlength="20" placeholder="z. B. 90 min, 5 Std, 3 Tage">', 'überschreibt die Auswahl')}</div>
         <button class="adm-go" data-act="pollAdd">📊 Umfrage starten</button>
         <div class="adm-sec"><h4>Umfragen (${pollItems ? pollItems.length : '…'})</h4>${list}</div>`;
       }
@@ -164,8 +179,8 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         const cur = players.find((p) => p.id === sel);
         return `
         <div class="adm-sec"><h4>🔎 Spielstand</h4><button data-act="inspect">📋 Spielstand ansehen</button>${info ? `<pre>${esc(info)}</pre>` : ''}</div>
-        <div class="adm-sec"><h4>🔇 Chat</h4><div class="adm-btns wrap"><button data-act="mute" data-min="10">10 Min stumm</button><button data-act="mute" data-min="60">1 Std stumm</button><button data-act="mute" data-min="1440">24 Std stumm</button><button data-act="mute" data-min="0">${cur && cur.muted ? '🔊 Stumm aufheben' : 'Stumm aufheben'}</button></div><small class="adm-small">Stumme Spieler können im Chat nicht schreiben. Einzelne Nachrichten löschst du direkt im Chat mit 🗑️.</small></div>
-        <div class="adm-sec"><h4>🚫 Zugang</h4>${fld('Dauer', `<select id="banDur">${DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`, 'Bann auf Zeit endet von selbst')}<label class="fld"><span>Bann-Nachricht (wird dem Spieler auf dem schwarzen Bildschirm angezeigt)</span><textarea id="banMsg" rows="2" maxlength="300" placeholder="z. B. Beleidigungen im Chat"></textarea></label><div class="adm-btns wrap"><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button>${cur && cur.banned ? '<button data-act="banmsg">💾 Nachricht ändern</button>' : ''}</div><small class="adm-small">Gesperrte Spieler sehen einen schwarzen Bildschirm mit „Du wurdest gebannt“ und deiner Nachricht, können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
+        <div class="adm-sec"><h4>🔇 Chat</h4><div class="adm-btns wrap"><button data-act="mute" data-min="10">10 Min stumm</button><button data-act="mute" data-min="60">1 Std stumm</button><button data-act="mute" data-min="1440">24 Std stumm</button><button data-act="mute" data-min="0">${cur && cur.muted ? '🔊 Stumm aufheben' : 'Stumm aufheben'}</button></div><div class="adm-grid">${fld('Eigene Dauer stumm', '<input type="text" id="muteC" maxlength="20" placeholder="z. B. 45 min, 3 Std, 2 Tage">')}<div class="adm-btns"><button data-act="muteC">🔇 Stumm schalten</button></div></div><small class="adm-small">Stumme Spieler können im Chat nicht schreiben. Einzelne Nachrichten löschst du direkt im Chat mit 🗑️.</small></div>
+        <div class="adm-sec"><h4>🚫 Zugang</h4><div class="adm-grid">${fld('Dauer', `<select id="banDur">${DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`, 'Bann auf Zeit endet von selbst')}${fld('Eigene Dauer', '<input type="text" id="banDurC" maxlength="20" placeholder="z. B. 90 min, 5 Std, 3 Tage">', 'überschreibt die Auswahl (max. 1 Jahr)')}</div><label class="fld"><span>Bann-Nachricht (wird dem Spieler auf dem schwarzen Bildschirm angezeigt)</span><textarea id="banMsg" rows="2" maxlength="300" placeholder="z. B. Beleidigungen im Chat"></textarea></label><div class="adm-btns wrap"><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button>${cur && cur.banned ? '<button data-act="banmsg">💾 Nachricht ändern</button>' : ''}</div><small class="adm-small">Gesperrte Spieler sehen einen schwarzen Bildschirm mit „Du wurdest gebannt“ und deiner Nachricht, können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
         <div class="adm-sec danger-zone"><h4>⚠️ Gefahrenzone</h4><div class="adm-btns wrap"><button class="danger" data-act="reset">♻️ Spielstand zurücksetzen</button><button class="danger" data-act="del">🗑️ Konto löschen</button></div></div>`;
       }
     }
@@ -259,6 +274,11 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return paint();
       }
       case 'adminDel': { if (!confirm('Diesem Admin die Rechte entziehen?')) return; try { await call('adminDel', { target: btn.dataset.id }); say('Admin entfernt'); await loadAdmins(); } catch { return; } return paint(); }
+      case 'muteC': {
+        const min = pickDur('#muteC', '#muteC'); if (!min) { say('Bitte eine gültige Dauer eingeben (z. B. 45 min, 3 Std, 2 Tage)', false); return paint(); }
+        try { await call('mute', { target: sel, minutes: min }); say(`${nameOf(sel)} ist ${fmtDur(min)} stumm`); await refresh(); } catch { return; }
+        return paint();
+      }
       case 'mute': {
         const min = +btn.dataset.min;
         try { await call('mute', { target: sel, minutes: min }); say(min ? `${nameOf(sel)} ist ${min >= 60 ? min / 60 + ' Std' : min + ' Min'} stumm` : `${nameOf(sel)} darf wieder schreiben`); await refresh(); } catch { return; }
@@ -272,14 +292,15 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'ban': {
         const p = players.find((x) => x.id === sel);
         const reason = (root.querySelector('#banMsg') || {}).value || '';
-        const minutes = +((root.querySelector('#banDur') || {}).value || 0);
+        const minutes = pickDur('#banDur', '#banDurC'); if (minutes === null) { say('Eigene Dauer ungültig (z. B. 90 min, 5 Std, 3 Tage; höchstens 1 Jahr)', false); return paint(); }
         try { await call('ban', { target: sel, banned: !p.banned, reason, minutes }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
         return paint();
       }
       case 'pollAdd': {
         const q = val('#pq').trim(); const opts = val('#po').split('\n').map((x) => x.trim()).filter(Boolean);
         if (q.length < 3 || opts.length < 2 || opts.length > 6) { say('Eine Frage und 2 bis 6 Antworten (je eine pro Zeile) eingeben', false); return paint(); }
-        try { await call('pollCreate', { q, opts, minutes: +val('#pd') }); say('Umfrage gestartet'); toast('📊 Umfrage gestartet'); await loadPolls(); } catch { return; }
+        const minutes = pickDur('#pd', '#pdC'); if (minutes === null) { say('Eigene Dauer ungültig (z. B. 90 min, 5 Std, 3 Tage; höchstens 1 Jahr)', false); return paint(); }
+        try { await call('pollCreate', { q, opts, minutes }); say('Umfrage gestartet'); toast('📊 Umfrage gestartet'); await loadPolls(); } catch { return; }
         return paint();
       }
       case 'pollClose': { try { await call('pollClose', { poll: btn.dataset.id }); say('Umfrage geändert'); await loadPolls(); } catch { return; } return paint(); }
@@ -289,7 +310,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
         const p = players.find((x) => x.id === sel); const reason = (root.querySelector('#banMsg') || {}).value || '';
-        const minutes = +((root.querySelector('#banDur') || {}).value || 0);
+        const minutes = pickDur('#banDur', '#banDurC'); if (minutes === null) { say('Eigene Dauer ungültig (z. B. 90 min, 5 Std, 3 Tage; höchstens 1 Jahr)', false); return paint(); }
         try { await call('ban', { target: sel, banned: true, reason, minutes, keep: true }); say(`Bann-Nachricht für ${p.name} geändert`); } catch { return; }
         return paint();
       }

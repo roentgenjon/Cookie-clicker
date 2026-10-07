@@ -217,7 +217,7 @@ async function admin(env, b) {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht stumm geschaltet werden', 403);
       const min = Math.floor(Number(b.minutes));
-      if (min > 0) await env.SAVES.put('mute:' + target, '1', { expirationTtl: Math.max(60, Math.min(min, 60 * 24 * 30) * 60) }); else await env.SAVES.delete('mute:' + target);
+      if (min > 0) await env.SAVES.put('mute:' + target, '1', { expirationTtl: Math.max(60, Math.min(min, 60 * 24 * 365) * 60) }); else await env.SAVES.delete('mute:' + target);
       return json(env, { ok: true });
     }
     case 'ban': {
@@ -239,7 +239,7 @@ async function admin(env, b) {
       const q = String(b.q || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140);
       const opts = (Array.isArray(b.opts) ? b.opts : []).map((o) => String(o || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 60)).filter(Boolean).slice(0, 6);
       if (q.length < 3 || opts.length < 2) return fail(env, 'Eine Frage und mindestens 2 Antworten angeben');
-      const minutes = Math.max(0, Math.min(Math.floor(Number(b.minutes)) || 0, 60 * 24 * 90));
+      const minutes = Math.max(0, Math.min(Math.floor(Number(b.minutes)) || 0, 60 * 24 * 365));
       const list = (await env.SAVES.get('polls', 'json')) || [];
       const poll = { id: rid().slice(0, 8), q, opts, by: me, created: Date.now(), end: minutes ? Date.now() + minutes * 60000 : 0, closed: false };
       list.unshift(poll);
