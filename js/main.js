@@ -24,6 +24,7 @@ let shown = 80;
 const MAX_SHOWN = 2560;
 let localLast = 0;
 let particles = ls.get('cc_particles') !== '0';
+let showBoosts = ls.get('cc_boosts') !== '0'; // aktive Boosts (Raserei, Klick-Raserei) neben „pro Sekunde“ anzeigen
 
 // ---------- Toasts ----------
 function toast(html) {
@@ -278,7 +279,7 @@ function renderSettings() {
   $('#modalBody').innerHTML = `<div class="stack">
     <label>Name deiner Bäckerei<input type="text" id="setName" maxlength="16" value="${esc(game.name)}"></label>
     <div class="rowf"><button id="setTheme">🌓 Design wechseln</button><button id="setPart">✨ Partikel: ${particles ? 'an' : 'aus'}</button><button id="saveNow">💾 Jetzt speichern</button></div>
-    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setMusic">${sound.music ? '🎵 Musik: an' : '🎵 Musik: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button></div>
+    <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setMusic">${sound.music ? '🎵 Musik: an' : '🎵 Musik: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button><button id="setBoosts">🔥 Boost-Anzeige: ${showBoosts ? 'an' : 'aus'}</button></div>
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
@@ -289,6 +290,7 @@ function renderSettings() {
   $('#testSound').addEventListener('click', async () => { const st = await sound.test(); toast(st === 'running' ? '🔔 Spielt der Ton? Wenn nicht: Lautstärke hochdrehen und den Stummschalter (Klingeln aus) des Geräts prüfen.' : `🔇 Audio blockiert (Status: ${st}). Tippe noch einmal auf den Knopf.`); });
   $('#setMusic').addEventListener('click', () => { sound.setMusic(!sound.music); renderSettings(); });
   $('#setRain').addEventListener('click', () => { rain = !rain; ls.set('cc_rain', rain ? '1' : '0'); renderSettings(); });
+  $('#setBoosts').addEventListener('click', () => { showBoosts = !showBoosts; ls.set('cc_boosts', showBoosts ? '1' : '0'); $('#buffs').innerHTML = ''; renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
@@ -434,7 +436,7 @@ function frame(now) {
   if (slowT >= 0.25) {
     slowT = 0; renderShop(); renderUpgrades();
     const buffs = game.buffs.map((b) => `<span>${b.type === 'frenzy' ? '🔥' : '👆'} ×${Math.round(b.mult * 10) / 10} ${Math.max(0, Math.ceil((b.until - Date.now()) / 1000))}s</span>`).join('');
-    $('#buffs').innerHTML = buffs;
+    $('#buffs').innerHTML = showBoosts ? buffs : '';
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
