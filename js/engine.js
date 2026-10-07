@@ -1,6 +1,6 @@
 import { SERIES, SERIES_COUNT, SERIES_LEVELS, seriesCost, seriesMaxAffordable, seriesLog } from './mega.js';
 import { Big, ZERO, geoCost, geoMax } from './big.js';
-import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemMultiplier, itemCost, itemMaxAffordable, soundDef, soundKind } from './extras.js';
+import { SKINS, skinById, dayKey, yesterdayKey, genTasks, soundDef, soundKind } from './extras.js';
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
@@ -56,7 +56,6 @@ export class Game {
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
-    this.items = {}; // gekaufte Shop-Items { id: Anzahl } (bleiben beim Aufstieg)
     this.sounds = { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' }; // Sound-Shop (bleibt beim Aufstieg)
     this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: ZERO }, claimed: [], streak: 0, lastDone: '' };
     this.buffs = []; this.gcs = []; this.gid = 0; this.nextGolden = 60;
@@ -150,7 +149,7 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    let base = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN((1 + 0.002 * this.achCount()) * this.itemMult);
+    let base = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
     if (this.sing > 0 && !base.isZero()) base = Big.fromLog(base.log10() * Math.pow(SING_POW, this.sing)); // Singularität: Produktion hoch 1,02^Stufe
     this.baseCps = base;
   }
@@ -164,7 +163,6 @@ export class Game {
     this.cookies = this.cookies.sub(cost); this.sing++; this.updateCps();
     return true;
   }
-  get itemMult() { return itemMultiplier(this.items); }
   // ---- Sound-Shop ----
   soundOwned(id) { return this.sounds.owned.includes(id); }
   buySound(id) {
@@ -175,21 +173,9 @@ export class Game {
     const k = soundKind(id); if (!k || !this.soundOwned(id)) return false;
     this.sounds[k] = id; return true;
   }
-  itemCount(id) { return this.items[id] || 0; }
-  // n = Anzahl oder 'max'
-  buyItem(id, n = 1) {
-    const it = itemById(id); if (!it) return 0;
-    const have = this.itemCount(id);
-    if (n === 'max') n = itemMaxAffordable(it, have, this.cookies);
-    if (!(n >= 1)) return 0;
-    const cost = itemCost(it, have, n);
-    if (cost.gt(this.cookies)) return 0;
-    this.cookies = this.cookies.sub(cost); this.items[id] = have + n; this.updateCps();
-    return n;
-  }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
   get cps() { return this.baseCps.mulN(this.buffMult('frenzy')).clamp(); }
-  get clickValue() { return Big.fromLog(this.clickLog).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click') * this.itemMult).clamp(); }
+  get clickValue() { return Big.fromLog(this.clickLog).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
   buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount); }
@@ -294,7 +280,7 @@ export class Game {
     }
     return { reward, bonus };
   }
-  unlockStats() { return { ach: this.achCount(), golden: this.golden, totalAll: this.totalReset.add(this.total).toNumber(), ascensions: this.ascensions, upgrades: this.upgradeCount, buildings: this.owned.reduce((a, b) => a + b, 0), clicks: this.clicks, chips: this.chipsEarned.toNumber(), items: this.items, itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0) }; }
+  unlockStats() { return { ach: this.achCount(), golden: this.golden, totalAll: this.totalReset.add(this.total).toNumber(), ascensions: this.ascensions, upgrades: this.upgradeCount, buildings: this.owned.reduce((a, b) => a + b, 0), clicks: this.clicks, chips: this.chipsEarned.toNumber() }; }
   unlockedSkins() { const st = this.unlockStats(); return SKINS.filter((k) => k.need(st)).map((k) => k.id); }
   setSkin(id) { if (this.unlockedSkins().includes(id)) { this.skin = id; return true; } return false; }
 
@@ -389,7 +375,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0), seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
+    const s = { sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
@@ -401,7 +387,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
+      sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
   load(d) {
@@ -425,8 +411,6 @@ export class Game {
       this.sounds.pack = soundKind(d.sounds.pack) === 'pack' && this.sounds.owned.includes(d.sounds.pack) ? d.sounds.pack : 'classic';
       this.sounds.track = soundKind(d.sounds.track) === 'track' && this.sounds.owned.includes(d.sounds.track) ? d.sounds.track : 'calm';
     }
-    if (Array.isArray(d.items)) { this.items = {}; for (const id of d.items) if (itemById(id)) this.items[id] = 1; } // alte Spielstände: je 1
-    else if (d.items && typeof d.items === 'object') { this.items = {}; for (const [id, n] of Object.entries(d.items)) if (itemById(id) && Number.isInteger(n) && n > 0) this.items[id] = Math.min(n, 1e9); }
     const dl = d.daily;
     if (dl && typeof dl.date === 'string' && Array.isArray(dl.tasks)) {
       this.daily = { date: dl.date, tasks: dl.tasks.filter((t) => t && typeof t.type === 'string' && (Number.isFinite(t.target) || (t.type === 'baked' && typeof t.target === 'string'))).slice(0, 3), claimed: Array.isArray(dl.claimed) ? dl.claimed.filter(Number.isInteger) : [], streak: num(dl.streak), lastDone: typeof dl.lastDone === 'string' ? dl.lastDone : '',

@@ -126,8 +126,9 @@ export function buildAchievements() {
   ups.forEach((n) => add(`Tüftler ${n}`, `${n} Upgrades besitzen`, '🧪', (s) => s.upgradeCount >= n));
   const asc = [1, 3, 10, 25];
   asc.forEach((n) => add(`Wiedergeburt ${n}`, `${n}× aufsteigen`, '🪽', (s) => s.ascensions >= n));
-  [1, 5, 11].forEach((n) => add(`Feinschmecker ${n}`, n === 11 ? 'Von jedem Shop-Item mindestens eins besitzen' : `${n} verschiedene Shop-Item${n > 1 ? 's' : ''} besitzen`, '🛒', (s) => s.itemCount >= n));
-  [10, 100, 1000].forEach((n) => add(`Sammler ${n}`, `${n} Shop-Items insgesamt besitzen`, '🧺', (s) => s.itemTotal >= n));
+  // (Plätze der früheren Item-Erfolge, damit gespeicherte Erfolge ihre Nummern behalten)
+  [1, 5, 11].forEach((n) => add(`Singularität ${n}`, `Singularität Stufe ${n} erreichen`, '🕳️', (s) => s.sing >= n));
+  [5000, 10000, 25000].forEach((n) => add(`Gold-Rausch ${n.toLocaleString('de-DE')}`, `${n.toLocaleString('de-DE')} goldene Kekse anklicken`, '✨', (s) => s.golden >= n));
   [1, 100, 10000, 100000].forEach((n) => add(`Mega-Sammler ${n.toLocaleString('de-DE')}`, `${n.toLocaleString('de-DE')} Mega-Upgrade-Stufen kaufen`, '♾️', (s) => s.seriesTotal >= n));
   const chips = [1, 10, 100, 1000];
   chips.forEach((n) => add(`Himmelsstaub ${n}`, `${n} Himmelschips verdient`, '😇', (s) => s.chipsEarned >= n));
