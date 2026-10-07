@@ -29,6 +29,17 @@ async function adminMap(env) { // feste + ernannte Admins
   return { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
 }
 const nameToId = async (name) => (await sha256('id:' + String(name).trim().toLowerCase())).slice(0, 16);
+// Online-Anzeige: höchstens alle 90 s wird ein kurzlebiger Eintrag geschrieben (spart Schreibvorgänge)
+async function touchSeen(env, id) {
+  const v = Number(await env.SAVES.get('seen:' + id)) || 0;
+  if (Date.now() - v > 90000) await env.SAVES.put('seen:' + id, String(Date.now()), { expirationTtl: 240 });
+}
+async function onlineIds(env) { return (await env.SAVES.list({ prefix: 'seen:', limit: 1000 })).keys.map((k) => k.name.slice(5)); }
+async function banLog(env, entry) {
+  const list = (await env.SAVES.get('banlog', 'json')) || [];
+  list.unshift({ t: Date.now(), ...entry });
+  await env.SAVES.put('banlog', JSON.stringify(list.slice(0, 200)));
+}
 const today = () => new Date().toISOString().slice(0, 10);
 
 // Brute-Force-Schutz
@@ -36,7 +47,7 @@ async function tooManyFails(env, id) { return Number(await env.SAVES.get('f:' + 
 async function addFail(env, id) { await env.SAVES.put('f:' + id, String(Number(await env.SAVES.get('f:' + id)) + 1), { expirationTtl: 600 }); }
 
 // Prüft id+secret. Gibt { rec } (rec kann null sein, wenn noch nicht registriert) oder { err } zurück.
-async function authenticate(env, b, { allowNew = false } = {}) {
+async function authenticate(env, b, { allowNew = false, allowBanned = false } = {}) {
   if (!b || !ID_RE.test(b.id) || !SECRET_RE.test(b.secret)) return { err: fail(env, 'Ungültige Zugangsdaten') };
   if (await tooManyFails(env, b.id)) return { err: fail(env, 'Zu viele Versuche – bitte 10 Minuten warten', 429) };
   const rec = await env.SAVES.get('p:' + b.id, 'json');
@@ -44,8 +55,11 @@ async function authenticate(env, b, { allowNew = false } = {}) {
   const hash = await sha256(b.secret);
   if (rec.h !== hash) { await addFail(env, b.id); return { err: fail(env, 'Falsches Passwort (oder Name schon vergeben)', 403) }; }
   const ban = await env.SAVES.get('ban:' + b.id);
-  if (ban) return { err: fail(env, 'Dein Konto wurde gesperrt.', 403, { banned: true, reason: ban === '1' ? '' : String(ban).slice(0, 300) }) };
-  return { rec, hash };
+  if (ban && !allowBanned) {
+    const ap = await env.SAVES.get('appeal:' + b.id, 'json'); // eigener Einspruch samt Antwort der Admins
+    return { err: fail(env, 'Dein Konto wurde gesperrt.', 403, { banned: true, reason: ban === '1' ? '' : String(ban).slice(0, 300), appeal: ap ? { text: ap.text, reply: ap.reply || '', t: ap.t } : null }) };
+  }
+  return { rec, hash, banned: !!ban };
 }
 
 // ---- erlaubte Ereignisse (für Admin → Spieler) ----
@@ -121,12 +135,13 @@ async function admin(env, b) {
   switch (b.action) {
     case 'whoami': return json(env, { admin: true, name: me });
     case 'players': {
-      const players = (await listPlayers(env)).sort((x, y) => y.score - x.score);
+      const on = new Set(await onlineIds(env));
+      const players = (await listPlayers(env)).map((p) => ({ ...p, online: on.has(p.id) })).sort((x, y) => y.score - x.score);
       return json(env, { players, now: Date.now() });
     }
     case 'stats': {
       const players = await listPlayers(env);
-      return json(env, { players: players.length, banned: players.filter((p) => p.banned).length, online: players.filter((p) => Date.now() - p.updated < 120000).length, totalCookies: players.reduce((a, p) => a + p.score, 0) });
+      return json(env, { players: players.length, banned: players.filter((p) => p.banned).length, online: (await onlineIds(env)).length, totalCookies: players.reduce((a, p) => a + p.score, 0) });
     }
     case 'inspect': {
       const rec = await needTarget(); if (!rec) return fail(env, 'Spieler nicht gefunden', 404);
@@ -196,13 +211,37 @@ async function admin(env, b) {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gesperrt werden', 403);
       const reason = typeof b.reason === 'string' ? b.reason.trim().slice(0, 300) : '';
-      if (b.banned) await env.SAVES.put('ban:' + target, reason || '1'); else await env.SAVES.delete('ban:' + target);
+      const minutes = Math.max(0, Math.min(Math.floor(Number(b.minutes)) || 0, 60 * 24 * 365)); // 0 = dauerhaft
+      const name = ((await env.SAVES.getWithMetadata('p:' + target, 'text')).metadata || {}).n || target;
+      if (b.banned) {
+        await env.SAVES.put('ban:' + target, reason || '1', minutes ? { expirationTtl: Math.max(60, minutes * 60) } : {});
+        await banLog(env, { action: b.keep ? 'edit' : 'ban', id: target, name, by: me, reason, minutes, until: minutes ? Date.now() + minutes * 60000 : 0 });
+      } else {
+        await env.SAVES.delete('ban:' + target); await env.SAVES.delete('appeal:' + target);
+        await banLog(env, { action: 'unban', id: target, name, by: me });
+      }
       return json(env, { ok: true });
+    }
+    case 'banLog': return json(env, { items: (await env.SAVES.get('banlog', 'json')) || [] });
+    case 'appealList': {
+      const l = await env.SAVES.list({ prefix: 'appeal:', limit: 200 });
+      const items = l.keys.map((k) => ({ id: k.name.slice(7), ...(k.metadata || {}) })).sort((x, y) => (y.t || 0) - (x.t || 0));
+      return json(env, { items });
+    }
+    case 'appealReply': {
+      const key = 'appeal:' + target; const ap = target && (await env.SAVES.get(key, 'json'));
+      if (!ap) return fail(env, 'Kein Einspruch gefunden', 404);
+      ap.reply = String(b.text || '').trim().slice(0, 300); ap.by = me; ap.rt = Date.now();
+      const meta = (await env.SAVES.getWithMetadata(key, 'text')).metadata || {};
+      await env.SAVES.put(key, JSON.stringify(ap), { metadata: { ...meta, r: ap.reply, o: ap.reply ? 0 : 1 }, expirationTtl: 60 * 60 * 24 * 30 });
+      return json(env, { ok: true });
+    }
+    case 'appealDel': { if (target) await env.SAVES.delete('appeal:' + target); return json(env, { ok: true });
     }
     case 'delete': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gelöscht werden', 403);
-      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:'].map((p) => env.SAVES.delete(p + target)));
+      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:', 'appeal:', 'seen:'].map((p) => env.SAVES.delete(p + target)));
       return json(env, { ok: true });
     }
     default: return fail(env, 'Unbekannte Aktion');
@@ -278,6 +317,28 @@ export default {
         return json(env, { players, me, by, total: ranked.length });
       }
 
+      // Wer ist gerade online (Namen)
+      if (url.pathname === '/api/online' && req.method === 'GET') {
+        const ids = await onlineIds(env); const names = [];
+        for (const id of ids.slice(0, 100)) { const n = ((await env.SAVES.getWithMetadata('p:' + id, 'text')).metadata || {}).n; if (n) names.push(n); }
+        return json(env, { online: names });
+      }
+
+      // Einspruch gegen einen Bann (nur für gebannte Spieler, 1 pro 10 Minuten)
+      if (url.pathname === '/api/appeal' && req.method === 'POST') {
+        const b = await req.json();
+        const au = await authenticate(env, b, { allowBanned: true });
+        if (au.err) return au.err;
+        if (!au.banned) return fail(env, 'Du bist nicht gebannt.');
+        const text = String(b.text || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 300);
+        if (text.length < 3) return fail(env, 'Bitte schreibe etwas mehr.');
+        const old = await env.SAVES.get('appeal:' + b.id, 'json');
+        if (old && Date.now() - old.t < 10 * 60000) return fail(env, 'Du kannst alle 10 Minuten einen Einspruch senden.', 429);
+        const name = ((await env.SAVES.getWithMetadata('p:' + b.id, 'text')).metadata || {}).n || 'Spieler';
+        await env.SAVES.put('appeal:' + b.id, JSON.stringify({ t: Date.now(), text, reply: '' }), { metadata: { n: name, t: Date.now(), x: text, o: 1, r: '' }, expirationTtl: 60 * 60 * 24 * 30 });
+        return json(env, { ok: true });
+      }
+
       // Spielerliste (nur Namen) für Geschenke
       if (url.pathname === '/api/players' && req.method === 'GET') {
         const list = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y.updated - x.updated).slice(0, 300);
@@ -339,6 +400,7 @@ export default {
         const au = await authenticate(env, b);
         if (au.err) return au.err;
         await runSched(env);
+        await touchSeen(env, b.id);
         const key = 'q:' + b.id;
         const q = (await env.SAVES.get(key, 'json')) || [];
         if (q.length) await env.SAVES.delete(key);

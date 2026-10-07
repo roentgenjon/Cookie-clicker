@@ -71,5 +71,7 @@ export const cloud = {
   chatSend(text) { return post('/api/chat/send', 'POST', { id: this.id, secret: this.secret, text }); },
   leaderboard(by = 'score') { return req(`/api/leaderboard?by=${by}&id=${this.id || ''}`); },
   players() { return req('/api/players'); },
+  online() { return req('/api/online'); },
+  appeal(text) { return post('/api/appeal', 'POST', { id: this.id, secret: this.secret, text }); },
   gift(to, amount) { return post('/api/gift', 'POST', { id: this.id, secret: this.secret, to, amount }); },
 };
