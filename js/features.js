@@ -124,7 +124,7 @@ export async function renderPolls(body, { title, toast, onSeen }) {
   if (!cloud.loggedIn) { body.innerHTML = '<p class="note">Melde dich unter „☁️ Anmelden“ an, um an Umfragen teilzunehmen.</p>'; return; }
   body.innerHTML = '<p class="note">Lade …</p>';
   const load = async () => {
-    let polls; try { polls = (await cloud.polls()).polls; } catch (e) { body.innerHTML = `<p class="note">❌ ${pesc(e.message)}</p>`; return; }
+    let polls; try { polls = (await cloud.polls()).polls; } catch (e) { body.innerHTML = `<p class="note">❌ ${pesc(e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Umfragen sind noch nicht freigeschaltet: Der Server muss erst aktualisiert werden.' : e.message)}</p>`; return; }
     const firstOpen = polls.find((p) => p.open); if (onSeen) onSeen(firstOpen ? firstOpen.id : '');
     body.innerHTML = polls.length ? `<div class="stack">${polls.map((p) => `<div class="poll ${p.open ? '' : 'done'}" data-poll="${p.id}">
         <h4>${pesc(p.q)}</h4>
