@@ -116,3 +116,25 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
     if (got) { buySound(); changed(); redraw(); }
   }));
 }
+
+// ---- Umfragen: Admins erstellen sie, alle angemeldeten Spieler stimmen ab (die Stimme lässt sich bis zum Ende ändern) ----
+const pesc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export async function renderPolls(body, { title, toast, onSeen }) {
+  title('📊 Umfragen');
+  if (!cloud.loggedIn) { body.innerHTML = '<p class="note">Melde dich unter „☁️ Anmelden“ an, um an Umfragen teilzunehmen.</p>'; return; }
+  body.innerHTML = '<p class="note">Lade …</p>';
+  const load = async () => {
+    let polls; try { polls = (await cloud.polls()).polls; } catch (e) { body.innerHTML = `<p class="note">❌ ${pesc(e.message)}</p>`; return; }
+    const firstOpen = polls.find((p) => p.open); if (onSeen) onSeen(firstOpen ? firstOpen.id : '');
+    body.innerHTML = polls.length ? `<div class="stack">${polls.map((p) => `<div class="poll ${p.open ? '' : 'done'}" data-poll="${p.id}">
+        <h4>${pesc(p.q)}</h4>
+        <small class="note">${p.open ? (p.end ? `offen bis ${new Date(p.end).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : 'offen') : 'beendet'} · von ${pesc(p.by)} · ${p.total} Stimme${p.total === 1 ? '' : 'n'}</small>
+        ${p.opts.map((o, i) => { const pct = p.total ? Math.round((p.counts[i] / p.total) * 100) : 0; return `<button class="po ${p.mine === i ? 'mine' : ''}" data-opt="${i}" ${p.open ? '' : 'disabled'} style="--w:${pct}%"><span>${p.mine === i ? '✔ ' : ''}${pesc(o)}</span><b>${pct} % · ${p.counts[i]}</b></button>`; }).join('')}
+      </div>`).join('')}</div>` : '<p class="note">Gerade gibt es keine Umfragen. Admins können neue erstellen.</p>';
+    body.querySelectorAll('.poll [data-opt]').forEach((b) => b.addEventListener('click', async () => {
+      const id = b.closest('.poll').dataset.poll;
+      try { await cloud.pollVote(id, +b.dataset.opt); toast('📊 Stimme gespeichert'); load(); } catch (e) { toast('❌ ' + pesc(e.message)); }
+    }));
+  };
+  load();
+}

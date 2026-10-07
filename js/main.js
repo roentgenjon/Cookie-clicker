@@ -5,7 +5,7 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift, renderSoundShop, renderMega, megaStateKey } from './features.js';
+import { renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT } from './mega.js';
 import { skinById } from './extras.js';
 let megaKey = '';
@@ -209,11 +209,11 @@ modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); 
 document.querySelectorAll('[data-modal]').forEach((b) => b.addEventListener('click', () => openModal(b.dataset.modal)));
 let isAdmin = false; let lastUnread = 0;
 function raiseBanners() { const h = $('#banners'); try { if (h.children.length) { h.hidePopover(); h.showPopover(); } } catch { /* ältere Browser */ } }
-function banner({ title, text, more }) {
+function banner({ title, text, more, icon = '💬', modal: target = 'chat' }) {
   const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const el = document.createElement('div'); el.className = 'banner';
-  el.innerHTML = `<div class="bn-i">💬</div><div class="bn-b"><b>${esc(title)}</b><span>${esc(String(text).slice(0, 120))}${more > 0 ? ` (+${more})` : ''}</span></div><small>jetzt</small>`;
-  el.addEventListener('click', () => { el.remove(); openModal('chat'); });
+  el.innerHTML = `<div class="bn-i">${icon}</div><div class="bn-b"><b>${esc(title)}</b><span>${esc(String(text).slice(0, 120))}${more > 0 ? ` (+${more})` : ''}</span></div><small>jetzt</small>`;
+  el.addEventListener('click', () => { el.remove(); openModal(target); });
   const host = $('#banners'); host.prepend(el);
   try { host.hidePopover(); host.showPopover(); } catch { /* ältere Browser */ }
   while (host.children.length > 3) host.lastChild.remove();
@@ -263,6 +263,7 @@ function renderModal() {
   else if (modalKind === 'mega') renderMega($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { lastKey = ''; saveLocal(); }, buySound: () => sound.buy() });
   else if (modalKind === 'sounds') renderSoundShop($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => saveLocal(), buySound: () => sound.shop(), apply: applySounds, preview: (kind, id) => (kind === 'pack' ? sound.previewPack(id) : sound.previewTrack(id)) });
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
+  else if (modalKind === 'polls') renderPolls($('#modalBody'), { toast, title: (t) => { $('#modalTitle').textContent = t; }, onSeen: (id) => { ls.set('cc_poll_seen', id); $('#pollBadge').textContent = ''; } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
   else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
   else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
@@ -395,6 +396,12 @@ function handleEvent(ev, from) {
   if (text) { if (ev.type === 'message') showMessage(from, text); else toast(`🛡️ <b>${esc(from || 'Admin')}</b>: ${esc(text)}`); }
   lastKey = ''; saveLocal();
 }
+// Neue Umfrage: Abzeichen am Knopf und einmaliger Hinweis oben
+function pollHint(poll) {
+  if (!poll || poll.id === ls.get('cc_poll_seen')) { $('#pollBadge').textContent = ''; return; }
+  $('#pollBadge').textContent = '!';
+  if (ls.get('cc_poll_notified') !== poll.id) { ls.set('cc_poll_notified', poll.id); sound.message(); banner({ title: '📊 Neue Umfrage', text: poll.q, icon: '📊', modal: 'polls' }); }
+}
 async function pollEvents() {
   if (!cloud.loggedIn || banned) return;
   try {
@@ -402,6 +409,7 @@ async function pollEvents() {
     const r = await cloud.events(since);
     ls.set('cc_bc', String(r.now));
     for (const ev of r.events || []) handleEvent(ev, ev.from);
+    pollHint(r.poll);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
     if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
   } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); }

@@ -27,8 +27,9 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
-const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals'];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
+const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls'];
+const POLL_DURATIONS = [[0, 'Ohne Ende'], [60, '1 Stunde'], [1440, '24 Stunden'], [10080, '7 Tage'], [43200, '30 Tage']];
 const DURATIONS = [[0, 'Dauerhaft'], [60, '1 Stunde'], [360, '6 Stunden'], [1440, '24 Stunden'], [10080, '7 Tage'], [43200, '30 Tage']]; // gelten nicht für einen einzelnen Spieler
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const fld = (label, html, hint = '') => `<label class="fld"><span>${label}</span>${html}${hint ? `<small>${hint}</small>` : ''}</label>`;
@@ -38,7 +39,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.closest('dialog')?.classList.add('wide');
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
-  let players = []; let banItems = null; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  let players = []; let pollItems = null; let banItems = null; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -79,6 +80,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     return e.type || '?';
   };
   async function loadSched() { try { schedItems = (await cloud.admin('schedList')).items; } catch { schedItems = []; } }
+  async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
   async function loadAdmins() { try { adminData = await cloud.admin('adminList'); } catch (e) { adminData = { error: e.message }; } }
@@ -125,6 +127,15 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         ${st === 'cookies' ? fld('Menge', '<input type="text" id="sAmt" value="1 mio">', 'z. B. 1 mio, 5e9') : ''}
         <button class="adm-go" data-act="schedAdd">⏰ Planen</button>
         <div class="adm-sec"><h4>Geplant (${schedItems ? schedItems.length : '…'})</h4>${items}</div>`;
+      }
+      case 'polls': {
+        const list = pollItems === null ? '<div class="adm-empty">Lade…</div>' : pollItems.length ? pollItems.map((p) => `<div class="adm-sec"><h4>${p.open ? '🟢' : '⚪'} ${esc(p.q)} <small>${p.total} Stimmen</small></h4>${p.opts.map((o, i) => `<div class="adm-sched"><span>${esc(o)}</span><span>${p.total ? Math.round((p.counts[i] / p.total) * 100) : 0} % (${p.counts[i]})</span><span></span></div>`).join('')}<div class="adm-btns wrap"><button data-act="pollClose" data-id="${p.id}">${p.open ? '🔒 Beenden' : '🔓 Wieder öffnen'}</button><button class="danger" data-act="pollDel" data-id="${p.id}">🗑️ Löschen</button></div></div>`).join('') : '<div class="adm-hint">Noch keine Umfragen.</div>';
+        return `<div class="adm-hint">Erstellt eine Umfrage für <b>alle Spieler</b>. Sie bekommen einen Hinweis und stimmen im Fenster „📊 Umfragen“ ab. Es bleiben die letzten 20 Umfragen gespeichert.</div>
+        ${fld('Frage', '<input type="text" id="pq" maxlength="140" placeholder="z. B. Welches Update wollt ihr als Nächstes?">')}
+        ${fld('Antworten (eine pro Zeile, 2 bis 6)', '<textarea id="po" rows="4" maxlength="400" placeholder="Auto-Kauf&#10;Gilden&#10;Neue goldene Kekse"></textarea>')}
+        ${fld('Dauer', `<select id="pd">${POLL_DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`)}
+        <button class="adm-go" data-act="pollAdd">📊 Umfrage starten</button>
+        <div class="adm-sec"><h4>Umfragen (${pollItems ? pollItems.length : '…'})</h4>${list}</div>`;
       }
       case 'banlog': {
         if (!banItems) return '<div class="adm-empty">Lade…</div>';
@@ -194,7 +205,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const row = e.target.closest('.adm-row[data-id]');
     if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -265,6 +276,14 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         try { await call('ban', { target: sel, banned: !p.banned, reason, minutes }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
         return paint();
       }
+      case 'pollAdd': {
+        const q = val('#pq').trim(); const opts = val('#po').split('\n').map((x) => x.trim()).filter(Boolean);
+        if (q.length < 3 || opts.length < 2 || opts.length > 6) { say('Eine Frage und 2 bis 6 Antworten (je eine pro Zeile) eingeben', false); return paint(); }
+        try { await call('pollCreate', { q, opts, minutes: +val('#pd') }); say('Umfrage gestartet'); toast('📊 Umfrage gestartet'); await loadPolls(); } catch { return; }
+        return paint();
+      }
+      case 'pollClose': { try { await call('pollClose', { poll: btn.dataset.id }); say('Umfrage geändert'); await loadPolls(); } catch { return; } return paint(); }
+      case 'pollDel': { if (!confirm('Diese Umfrage samt Stimmen löschen?')) return; try { await call('pollDel', { poll: btn.dataset.id }); say('Umfrage gelöscht'); await loadPolls(); } catch { return; } return paint(); }
       case 'apReply': { const id = btn.dataset.id; const text = (root.querySelector('#ar_' + id) || {}).value || ''; try { await call('appealReply', { target: id, text }); say('Antwort gesendet'); await loadAppeals(); } catch { return; } return paint(); }
       case 'apUnban': { const id = btn.dataset.id; try { await call('ban', { target: id, banned: false }); say('Entbannt'); await loadAppeals(); await refresh(); } catch { return; } return paint(); }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }

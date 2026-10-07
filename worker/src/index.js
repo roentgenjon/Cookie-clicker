@@ -40,6 +40,19 @@ async function banLog(env, entry) {
   list.unshift({ t: Date.now(), ...entry });
   await env.SAVES.put('banlog', JSON.stringify(list.slice(0, 200)));
 }
+// ---- Umfragen ----
+const pollOpen = (p) => !p.closed && (!p.end || p.end > Date.now());
+async function pollsWithVotes(env, myId) {
+  const list = (await env.SAVES.get('polls', 'json')) || [];
+  const out = [];
+  for (const p of list) {
+    const votes = (await env.SAVES.list({ prefix: `pv:${p.id}:`, limit: 1000 })).keys;
+    const counts = p.opts.map(() => 0); let mine = -1;
+    for (const k of votes) { const o = k.metadata && k.metadata.o; if (Number.isInteger(o) && counts[o] !== undefined) counts[o]++; if (myId && k.name.endsWith(':' + myId)) mine = o; }
+    out.push({ id: p.id, q: p.q, opts: p.opts, by: p.by, created: p.created, end: p.end || 0, open: pollOpen(p), counts, total: counts.reduce((a, c) => a + c, 0), mine });
+  }
+  return out;
+}
 const today = () => new Date().toISOString().slice(0, 10);
 
 // Brute-Force-Schutz
@@ -222,6 +235,26 @@ async function admin(env, b) {
       }
       return json(env, { ok: true });
     }
+    case 'pollCreate': {
+      const q = String(b.q || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140);
+      const opts = (Array.isArray(b.opts) ? b.opts : []).map((o) => String(o || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 60)).filter(Boolean).slice(0, 6);
+      if (q.length < 3 || opts.length < 2) return fail(env, 'Eine Frage und mindestens 2 Antworten angeben');
+      const minutes = Math.max(0, Math.min(Math.floor(Number(b.minutes)) || 0, 60 * 24 * 90));
+      const list = (await env.SAVES.get('polls', 'json')) || [];
+      const poll = { id: rid().slice(0, 8), q, opts, by: me, created: Date.now(), end: minutes ? Date.now() + minutes * 60000 : 0, closed: false };
+      list.unshift(poll);
+      for (const old of list.splice(20)) { for (const k of (await env.SAVES.list({ prefix: `pv:${old.id}:`, limit: 1000 })).keys) await env.SAVES.delete(k.name); } // nur die letzten 20 Umfragen behalten
+      await env.SAVES.put('polls', JSON.stringify(list));
+      return json(env, { ok: true, id: poll.id });
+    }
+    case 'pollList': return json(env, { items: await pollsWithVotes(env, null) });
+    case 'pollClose': case 'pollDel': {
+      const list = (await env.SAVES.get('polls', 'json')) || []; const p = list.find((x) => x.id === b.poll);
+      if (!p) return fail(env, 'Umfrage nicht gefunden', 404);
+      if (b.action === 'pollClose') { p.closed = !p.closed; await env.SAVES.put('polls', JSON.stringify(list)); }
+      else { await env.SAVES.put('polls', JSON.stringify(list.filter((x) => x.id !== b.poll))); for (const k of (await env.SAVES.list({ prefix: `pv:${b.poll}:`, limit: 1000 })).keys) await env.SAVES.delete(k.name); }
+      return json(env, { ok: true });
+    }
     case 'banLog': return json(env, { items: (await env.SAVES.get('banlog', 'json')) || [] });
     case 'appealList': {
       const l = await env.SAVES.list({ prefix: 'appeal:', limit: 200 });
@@ -317,6 +350,21 @@ export default {
         return json(env, { players, me, by, total: ranked.length });
       }
 
+      // Umfragen: lesen und abstimmen (nur angemeldet; jede Stimme kann bis zum Ende der Umfrage geändert werden)
+      if (url.pathname === '/api/polls' && req.method === 'POST') {
+        const b = await req.json(); const au = await authenticate(env, b); if (au.err) return au.err;
+        return json(env, { polls: await pollsWithVotes(env, b.id) });
+      }
+      if (url.pathname === '/api/polls/vote' && req.method === 'POST') {
+        const b = await req.json(); const au = await authenticate(env, b); if (au.err) return au.err;
+        const p = ((await env.SAVES.get('polls', 'json')) || []).find((x) => x.id === b.poll);
+        if (!p) return fail(env, 'Umfrage nicht gefunden', 404);
+        if (!pollOpen(p)) return fail(env, 'Diese Umfrage ist beendet.');
+        const o = Math.floor(Number(b.opt)); if (!(o >= 0 && o < p.opts.length)) return fail(env, 'Ungültige Antwort');
+        await env.SAVES.put(`pv:${p.id}:${b.id}`, String(o), { metadata: { o }, expirationTtl: 60 * 60 * 24 * 120 });
+        return json(env, { ok: true });
+      }
+
       // Wer ist gerade online (Namen)
       if (url.pathname === '/api/online' && req.method === 'GET') {
         const ids = await onlineIds(env); const names = [];
@@ -406,7 +454,8 @@ export default {
         if (q.length) await env.SAVES.delete(key);
         const since = Number(b.since) || 0;
         const bc = ((await env.SAVES.get('bc', 'json')) || []).filter((x) => x.t > since);
-        return json(env, { events: q, broadcasts: bc, now: Date.now() });
+        const open = ((await env.SAVES.get('polls', 'json')) || []).find(pollOpen); // neueste offene Umfrage (für den Hinweis im Spiel)
+        return json(env, { events: q, broadcasts: bc, now: Date.now(), poll: open ? { id: open.id, q: open.q } : null });
       }
 
       // Chat lesen (ohne Anmeldung möglich)

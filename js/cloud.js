@@ -72,6 +72,8 @@ export const cloud = {
   leaderboard(by = 'score') { return req(`/api/leaderboard?by=${by}&id=${this.id || ''}`); },
   players() { return req('/api/players'); },
   online() { return req('/api/online'); },
+  polls() { return post('/api/polls', 'POST', { id: this.id, secret: this.secret }); },
+  pollVote(poll, opt) { return post('/api/polls/vote', 'POST', { id: this.id, secret: this.secret, poll, opt }); },
   appeal(text) { return post('/api/appeal', 'POST', { id: this.id, secret: this.secret, text }); },
   gift(to, amount) { return post('/api/gift', 'POST', { id: this.id, secret: this.secret, to, amount }); },
 };
