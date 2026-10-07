@@ -248,6 +248,7 @@ function renderModal() {
       <span>Upgrades</span><span>${(BigInt(game.upgradeCount) + BigInt(Math.floor(game.seriesTotal))).toLocaleString('de-DE')} / ${TOTAL_ALL_TEXT}</span>
       <span>Erfolge</span><span>${game.achCount()} / ${ACH.length}</span>
       <span>Aufstiege</span><span>${game.ascensions}</span>
+      <span>Singularität</span><span>${game.sing ? `Stufe ${game.sing.toLocaleString('de-DE')} (Produktion hoch ${game.singPower.toFixed(3).replace('.', ',')})` : 'noch nicht gekauft'}</span>
       <span>Himmelschips</span><span>${fmt(game.chipsAvailable)} frei / ${fmt(game.chipsEarned)} gesamt</span>
       <span>Spielzeit</span><span>${fmtTime((Date.now() - game.start) / 1000)}</span>
       <span>Offline-Ertrag</span><span>${Math.round(game.offline * 100)} % (max. ${fmtTime(game.offlineCap)})</span></div>`;

@@ -110,8 +110,14 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
 let megaAmt = 1; // 1 / 10 / 100 / 1000 / 'max'
 const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, seriesMaxAffordable(SERIES[i], game.series[i], game.cookies)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
 const big = (n) => BigInt(Math.floor(n)).toLocaleString('de-DE');
-export function megaStateKey(game) { return game.series.join() + megaAmt + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies.gte(seriesCost(SERIES[i], game.series[i], megaN(i, game))) ? 2 : 1) : 0)).join(''); }
+export function megaStateKey(game) { return game.series.join() + megaAmt + game.sing + (game.singAvailable && game.cookies.gte(game.singCost) ? 's' : '-') + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies.gte(seriesCost(SERIES[i], game.series[i], megaN(i, game))) ? 2 : 1) : 0)).join(''); }
 
+function singCard(game, fmt) {
+  const l = game.sing;
+  if (!game.singAvailable && !l) return `<div class="item"><div class="ie">🕳️</div><div class="in"><b>Singularität</b><div class="ip">Endlose Stufen: jede hebt deine ganze Produktion in die Potenz 1,02 – ohne Obergrenze. Freigeschaltet ab 1e100 Kekse pro Sekunde.</div></div><button disabled>🔒 gesperrt</button></div>`;
+  const cost = game.singCost; const can = game.cookies.gte(cost);
+  return `<div class="item has"><div class="ie">🕳️</div><div class="in"><b>Singularität · Stufe ${big(l)}</b><div class="ip">Jede Stufe: Produktion hoch 1,02. Preis: ${(60 * Math.pow(1.03, l)).toLocaleString('de-DE', { maximumFractionDigits: 0 })} s Produktion – wächst mit, es gibt immer eine nächste Stufe.</div><div class="have">${l ? `Aktuell: Exponent × ${game.singPower.toFixed(3).replace('.', ',')}` : 'Noch nicht gekauft'}</div></div><button data-sing ${can ? '' : 'disabled'}>🍪 ${fmt(cost)}</button></div>`;
+}
 export function renderMega(body, { game, fmt, toast, title, changed, buySound }) {
   title('♾️ Mega-Upgrades');
   const vis = SERIES.map((_, i) => i).filter((i) => game.seriesVisible(i));
@@ -121,6 +127,7 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
     <div class="shop-top"><div><b>${big(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</b><div class="note">Upgrades gekauft (normale + Mega-Stufen)</div></div>
       <div class="seg" id="mgAmt">${[1, 10, 100, 1000, 'max'].map((n) => `<button data-n="${n}" class="${n === megaAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
     <p class="note">Jede Reihe hat knapp <b>100 Billionen Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
+    <div class="items">${singCard(game, fmt)}</div>
     <div class="items">${vis.map((i) => {
       const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = game.cookies.gte(cost);
       return `<div class="item ${have ? 'has' : ''}"><div class="ie">${s.icon}<small class="ib">${s.badge}</small></div><div class="in"><b>${s.name}</b><div class="ip">${seriesDesc(s).split(': ').pop()}</div><div class="have">Stufe <b>${big(have)}</b>${have ? ` · aktuell ×${fmt(seriesFactor(s, have))}` : ''}</div></div><button data-mg="${i}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${fmt(cost)}</button></div>`;
@@ -128,6 +135,7 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
     ${locked.length ? `<div class="adm-sec"><h4>🔒 ${locked.length} weitere Reihen gesperrt</h4>${locked.slice(0, 5).map((i) => `<div class="adm-sched"><span>${SERIES[i].icon}</span><span>${SERIES[i].name}</span><span class="note">${seriesNeedText(SERIES[i])}</span></div>`).join('')}</div>` : ''}</div>`;
   const redraw = () => renderMega(body, { game, fmt, toast, title, changed, buySound });
   body.querySelector('#mgAmt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; megaAmt = b.dataset.n === 'max' ? 'max' : +b.dataset.n; redraw(); });
+  const sb = body.querySelector('[data-sing]'); if (sb) sb.addEventListener('click', () => { if (game.buySing()) { buySound(); toast(`🕳️ Singularität Stufe ${big(game.sing)}!`); changed(); redraw(); } });
   body.querySelectorAll('[data-mg]').forEach((b) => b.addEventListener('click', () => {
     const i = +b.dataset.mg; const got = game.buySeries(i, megaN(i, game));
     if (got) { buySound(); changed(); redraw(); }
