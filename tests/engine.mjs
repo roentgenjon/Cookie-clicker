@@ -118,19 +118,20 @@ assert.ok(ba.series.filter((n) => n > 0).length > 20, 'verteilt auf viele Reihen
 const bb = new Game(); bb.cookies = B(5); assert.equal(bb.buyAllSeries(), 0);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toString());
 
-// ---- Große Zahlen bis 9,99e999 ----
+// ---- Große Zahlen ohne Obergrenze ----
 {
   const a = B('5e500'), b = B('3e500');
   assert.equal(a.add(b).toString(), B('8e500').toString()); assert.ok(a.sub(b).toString().startsWith('2.0000000000000') && a.sub(b).e === 500);
-  assert.equal(B('1e99999999999').mulN(20).clamp().toString(), B('9.99e99999999999').toString(), 'Obergrenze 9,99e99999999999');
+  assert.equal(B('1e99999999999').mulN(20).e, 100000000000, 'keine Obergrenze');
+  const huge = B('1e' + '9'.repeat(200)); assert.ok(Number.isFinite(huge.mul(huge).e) && Number.isFinite(huge.mul(huge).mulN(5).log10()), 'nie Infinity'); assert.equal(Big.parse(huge.toString()).toString(), huge.toString(), 'Speichern riesiger Exponenten');
   assert.equal(fmtBig(B('1.234e500')), '1,23e500'); assert.equal(fmtBig(B(1500000)), '1,5 Mio'); assert.equal(fmtBig(B(15)), '15');
   assert.ok(B('1e400').gt(B('9e399')) && B('1e400').lt(B('1e401')) && B(0).lt(B(1)));
   // Spiel mit riesigen Multiplikatoren: endlich, nie NaN, bleibt unter der Grenze
   const g = new Game(); g.globalLog = 2e11; g.clickLog = 2e11; g.tierLog.fill(2e11); g.owned.fill(1e6); g.updateCps();
   for (let i = 0; i < 5; i++) g.earn(g.cps.mulN(1e6));
   g.click();
-  for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) assert.ok(Number.isFinite(v.log10()) && v.e <= 99999999999, 'endlich: ' + v);
-  assert.equal(g.cookies.toString(), B('9.99e99999999999').toString(), 'Kekse stoppen bei 9,99e99999999999'); assert.equal(fmtBig(g.cookies), '9,99e99999999999');
+  for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) assert.ok(Number.isFinite(v.log10()) && Number.isFinite(v.e), 'endlich: ' + v);
+  assert.ok(g.cookies.e > 99999999999, 'Kekse wachsen über 1e11 hinaus'); assert.equal(fmtBig(B('9.99e99999999999')), 'e1,00e11'); assert.equal(fmtBig(B('9.999e500')), '1,00e501'); assert.equal(fmtBig(B('1.5e99999999')), '1,50e99999999'); assert.equal(fmtBig(B('1.23e1234567890')), 'e1,23e9'); assert.equal(fmtBig(B('1e1000000000')), 'e1,00e9'); assert.equal(fmtBig(B('5e300000000000')), 'e3,00e11');
   const g2 = new Game(); g2.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(g2.cookies.toString(), g.cookies.toString(), 'Speichern/Laden über 1e308');
   // Preise und Kauf jenseits von 1e308
   const h = new Game(); h.owned[5] = 8000; h.cookies = B('1e600'); h.total = B('1e600'); h.recalc();

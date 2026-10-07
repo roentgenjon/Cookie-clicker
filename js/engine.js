@@ -4,7 +4,7 @@ import { SKINS, skinById, dayKey, yesterdayKey, genTasks, ITEMS, itemById, itemM
 import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
-// Kekse, Produktion und Preise sind Big-Zahlen (bis 9,99e99999999999). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
+// Kekse, Produktion und Preise sind Big-Zahlen (ohne Obergrenze). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
 const CHIP_CAP = 1e300; // Himmelschips bleiben normale Zahlen
 const LG = { tierBig: Math.log10(EFFECT.tierBig), tierSmall: Math.log10(EFFECT.tierSmall), click: Math.log10(EFFECT.click), global: Math.log10(EFFECT.global), hGlobal: Math.log10(EFFECT.hGlobal), hClick: Math.log10(EFFECT.hClick) };
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
