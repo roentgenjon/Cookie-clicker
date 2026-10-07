@@ -1,8 +1,7 @@
 name: Deploy Cloudflare Worker
+# Läuft nur noch von Hand (Actions → „Deploy Cloudflare Worker“ → Run workflow). Dafür müssen in GitHub die Secrets
+# CLOUDFLARE_API_TOKEN und CLOUDFLARE_ACCOUNT_ID eingetragen sein. Vorher lief es bei jeder Änderung in worker/ und schlug ohne Secrets fehl.
 on:
-  push:
-    branches: [claude/cookie-clicker-game, main, master]
-    paths: ['worker/**']
   workflow_dispatch:
 permissions:
   contents: write
