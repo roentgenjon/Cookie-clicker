@@ -21,13 +21,13 @@ assert.equal(g2.upgradeCount, g.upgradeCount);
 assert.deepEqual(g2.owned, g.owned);
 // alles kaufen -> keine NaN
 const g3 = new Game();
-g3.owned.fill(250); g3.bought.fill(1); g3.chipsEarned = 5000; g3.recalc();
+g3.owned.fill(250); g3.bought.fill(1); g3.chipsEarned = B(5000); g3.recalc();
 assert.equal(g3.upgradeCount, 400000);
 assert.ok(Number.isFinite(g3.cps.log10()) && g3.cps.log10() > 0 && Number.isFinite(g3.clickValue.log10()), 'cps endlich');
 // Aufstieg
 const g4 = new Game(); g4.total = B(8e12); g4.cookies = B(8e12);
-assert.equal(g4.chipsGain, 2);
-assert.ok(g4.ascend() && g4.chipsEarned === 2 && g4.cookies.isZero());
+assert.equal(N(g4.chipsGain), 2);
+assert.ok(g4.ascend() && N(g4.chipsEarned) === 2 && g4.cookies.isZero());
 // Erfolge
 const g5 = new Game(); g5.owned[0] = 1; g5.total = B(5); g5.clicks = 1;
 assert.ok(g5.checkAchievements().length >= 2);
@@ -38,7 +38,7 @@ const g9 = new Game(); g9.owned[1] = 5; g9.recalc();
 g9.applyEvent({ type: 'golden', effect: 'lucky', count: 3 }); assert.ok(g9.gcs.length === 3 && g9.gcs[0].effect === 'lucky');
 g9.applyEvent({ type: 'cookies', amount: 1000 }); assert.equal(N(g9.cookies), 1000);
 g9.applyEvent({ type: 'cookies', amount: -5000 }); assert.ok(g9.cookies.isZero());
-g9.applyEvent({ type: 'chips', amount: 4 }); assert.equal(g9.chipsEarned, 4);
+g9.applyEvent({ type: 'chips', amount: 4 }); assert.equal(N(g9.chipsEarned), 4);
 g9.applyEvent({ type: 'building', b: 2, amount: 7 }); assert.equal(g9.owned[2], 7);
 g9.applyEvent({ type: 'buff', kind: 'frenzy', mult: 10, seconds: 60 }); assert.equal(g9.buffMult('frenzy'), 10);
 g9.applyEvent({ type: 'buff', kind: 'click', mult: 50, seconds: 60 }); assert.equal(g9.buffMult('click'), 50);
@@ -49,8 +49,8 @@ g9.name = 'X'; g9.applyEvent({ type: 'reset' }); assert.ok(g9.cookies.isZero());
 const g7 = new Game(); g7.owned[1] = 10; g7.recalc();
 const r = g7.catchUp(3600); assert.ok(Math.abs(N(r.gain) / N(g7.baseCps.mulN(3600)) - 1) < 1e-9);
 assert.equal(g7.catchUp(1e9).offlineSecs, 24 * 3600);
-const g8 = new Game(); g8.chipsEarned = 50; g8.recalc();
-const n8 = g8.buyAllAffordable(true); assert.ok(n8 > 5 && g8.chipsAvailable >= 0, 'himmlische alle kaufen');
+const g8 = new Game(); g8.chipsEarned = B(50); g8.recalc();
+const n8 = g8.buyAllAffordable(true); assert.ok(n8 > 5 && N(g8.chipsAvailable) >= 0, 'himmlische alle kaufen');
 // Sammelkauf + Speichergröße
 const g10 = new Game(); g10.owned.fill(300); g10.recalc(); g10.total = g10.cookies = B(1e60);
 let t0 = Date.now(); const bought = g10.buyAllAffordable(false); const tBuy = Date.now() - t0;
@@ -146,4 +146,16 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const w = new Game(); w.cookies = B('1e5000'); w.total = B('1e5000'); w.owned[3] = 10; w.recalc(); assert.ok(w.buyBuilding(3, 1) && w.cookies.e === 5000, 'Rechnen mit 1e5000');
   const old = new Game(); old.load({ v: 2, cookies: 123456, total: 1e20 }); assert.equal(N(old.cookies), 123456, 'alte Spielstände (Zahl)');
   console.log('Große-Zahlen-Test OK');
+}
+
+// ---- Keine Obergrenze: Himmelschips und Tagesaufgabe ----
+{
+  const g = new Game(); g.total = B('1e3000'); g.cookies = B('1e3000');
+  const gain = g.chipsGain; assert.ok(gain.e === 996 || gain.e === 997, 'Chips aus 1e3000 Keksen: ' + gain); // ³√(1e3000/1e12) = 1e996
+  assert.ok(g.ascend() && g.chipsEarned.e >= 995); g.owned[1] = 5; g.recalc(); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.e > 990, 'Chips wirken als riesiger Multiplikator');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.chipsEarned.toString(), g.chipsEarned.toString(), 'riesige Chips speichern');
+  const d = new Game(); d.owned[1] = 5; d.recalc(); d.cookies = B(0); d.ensureDaily();
+  const bk = d.daily.tasks.find((x) => x.type === 'baked'); if (bk) { assert.equal(typeof bk.target, 'string'); d.earn(B('1e600')); const st = d.dailyState().find((x) => x.type === 'baked'); assert.ok(st.done && st.ratio === 1, 'Tagesaufgabe Backen mit riesigen Zahlen'); }
+  const dd = new Game(); dd.load(JSON.parse(JSON.stringify(d.serialize()))); assert.equal(dd.daily.tasks.length, 3);
+  console.log('Keine-Obergrenze-Test OK');
 }

@@ -1,5 +1,5 @@
 // Keks-Skins und tägliche Aufgaben (reine Daten/Logik, ohne DOM).
-import { geoCost, geoMax } from './big.js';
+import { Big, geoCost, geoMax, fmtBig } from './big.js';
 
 // need(s): s = { ach, golden, totalAll, ascensions, upgrades, buildings, clicks, chips }
 export const SKINS = [
@@ -29,7 +29,7 @@ export const TASK_INFO = {
   golden: { icon: '🌟', text: (t) => `Fange ${t} goldene Kekse` },
   buildings: { icon: '🏭', text: (t) => `Kaufe ${t} Gebäude` },
   upgrades: { icon: '🧪', text: (t) => `Kaufe ${t} Upgrades` },
-  baked: { icon: '🍪', text: (t) => `Backe ${t.toLocaleString('de-DE')} Kekse` },
+  baked: { icon: '🍪', text: (t) => `Backe ${fmtBig(t)} Kekse` },
 };
 
 export function dayKey(d = new Date()) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -43,7 +43,7 @@ export function genTasks(date, baseCps) {
   const pick = (a, b) => Math.floor(a + rnd() * (b - a + 1));
   return types.slice(0, 3).map((type) => ({
     type,
-    target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Math.min(1e300, Math.max(10000, Math.round(baseCps * pick(900, 3600)))),
+    target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Big.from(baseCps).mulN(pick(900, 3600)).max(10000).floor().toString(),
   }));
 }
 

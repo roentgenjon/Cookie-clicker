@@ -5,7 +5,6 @@ import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGR
 
 export const ACH = buildAchievements();
 // Kekse, Produktion und Preise sind Big-Zahlen (ohne Obergrenze). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
-const CHIP_CAP = 1e300; // Himmelschips bleiben normale Zahlen
 const LG = { tierBig: Math.log10(EFFECT.tierBig), tierSmall: Math.log10(EFFECT.tierSmall), click: Math.log10(EFFECT.click), global: Math.log10(EFFECT.global), hGlobal: Math.log10(EFFECT.hGlobal), hClick: Math.log10(EFFECT.hClick) };
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
@@ -49,13 +48,13 @@ export class Game {
     this.bought = new Uint8Array(TOTAL_UPGRADES);
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
-    this.ascensions = 0; this.chipsEarned = 0; this.chipsSpent = 0;
+    this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
     this.items = {}; // gekaufte Shop-Items { id: Anzahl } (bleiben beim Aufstieg)
     this.sounds = { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' }; // Sound-Shop (bleibt beim Aufstieg)
-    this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 }, claimed: [], streak: 0, lastDone: '' };
+    this.daily = { date: '', tasks: [], prog: { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: ZERO }, claimed: [], streak: 0, lastDone: '' };
     this.buffs = []; this.gcs = []; this.gid = 0; this.nextGolden = 60;
     this.recalc();
   }
@@ -147,7 +146,7 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    this.baseCps = sum.mulLog(this.globalLog).mulN((1 + 0.01 * this.chipsEarned) * (1 + 0.002 * this.achCount()) * this.itemMult).clamp();
+    this.baseCps = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN((1 + 0.002 * this.achCount()) * this.itemMult);
   }
   get itemMult() { return itemMultiplier(this.items); }
   // ---- Sound-Shop ----
@@ -197,25 +196,25 @@ export class Game {
 
   // ---- Upgrades ----
   // tn/cn: Gesamt-Kekse bzw. Kekse als normale Zahl (bei Schleifen vorab berechnet; Infinity bei > 1e308)
-  isVisible(id, tn = this.total.toNumber()) {
+  isVisible(id, tn = this.total.toNumber(), ce = this.chipsEarned.toNumber()) {
     if (this.bought[id]) return false;
     switch (KIND[id]) {
       case K.TIER: return this.owned[P1[id]] >= NEED[id];
       case K.SYN: return this.owned[P1[id]] >= NEED[id] && this.owned[P2[id]] >= NEED[id];
       case K.GOLDEN: return this.golden >= NEED[id] && tn >= COST[id] / 10;
-      case K.HEAVEN: return this.chipsEarned >= Math.ceil(COST[id] / 2);
+      case K.HEAVEN: return ce >= Math.ceil(COST[id] / 2);
       default: return tn >= COST[id] / 10;
     }
   }
-  canAfford(id, cn = this.cookies.toNumber()) { return KIND[id] === K.HEAVEN ? this.chipsAvailable >= COST[id] : cn >= COST[id]; }
-  get chipsAvailable() { return this.chipsEarned - this.chipsSpent; }
+  canAfford(id, cn = this.cookies.toNumber(), av = this.chipsAvailable.toNumber()) { return KIND[id] === K.HEAVEN ? av >= COST[id] : cn >= COST[id]; }
+  get chipsAvailable() { return this.chipsEarned.sub(this.chipsSpent); }
   // Sichtbare Upgrades (nach Preis sortiert): liefert die ersten `limit` IDs und die Gesamtzahl. kind = null oder Typ-Nummer.
   visibleList(heaven, kind = null, limit = 100) {
-    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; const ids = []; let total = 0; const tn = this.total.toNumber();
+    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; const ids = []; let total = 0; const tn = this.total.toNumber(); const ce = this.chipsEarned.toNumber();
     for (let i = 0; i < order.length; i++) {
       const id = order[i];
       if (kind !== null && KIND[id] !== kind) continue;
-      if (!this.isVisible(id, tn)) continue;
+      if (!this.isVisible(id, tn, ce)) continue;
       if (ids.length < limit) ids.push(id);
       total++;
     }
@@ -231,31 +230,42 @@ export class Game {
   }
   // heaven=true: himmlische Upgrades (Chips), sonst Cookie-Upgrades; kind = null oder Typ-Nummer
   buyAllAffordable(heaven = false, kind = null) {
-    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; let n = 0; let cn = this.cookies.toNumber();
+    const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; let n = 0; let cn = this.cookies.toNumber(); let av = this.chipsAvailable.toNumber();
     for (let i = 0; i < order.length; i++) {
       const id = order[i];
       if (!heaven && COST[id] > cn) break; // nach Preis sortiert
       if (kind !== null && KIND[id] !== kind) continue;
-      if (this.canAfford(id, cn) && this.buyUpgrade(id, true)) { n++; cn = this.cookies.toNumber(); }
+      if (this.canAfford(id, cn, av) && this.buyUpgrade(id, true)) { n++; cn = this.cookies.toNumber(); av = this.chipsAvailable.toNumber(); }
     }
     if (n) this.updateCps();
     return n;
   }
 
   // ---- Aktionen ----
-  earn(x) { x = Big.from(x); this.cookies = this.cookies.add(x).clamp(); this.total = this.total.add(x).clamp(); this.daily.prog.baked = Math.min(1e300, this.daily.prog.baked + x.toNumber()); }
+  earn(x) { x = Big.from(x); this.cookies = this.cookies.add(x).clamp(); this.total = this.total.add(x).clamp(); this.daily.prog.baked = this.daily.prog.baked.add(x); }
   click() { const v = this.clickValue; this.earn(v); this.clicks++; this.daily.prog.clicks++; return v; }
 
   // ---- Tägliche Aufgaben & Skins ----
   ensureDaily() {
     const today = dayKey(); const d = this.daily;
     if (d.date === today) return false;
-    d.date = today; d.tasks = genTasks(today, this.baseCps.toNumber()); d.claimed = []; d.prog = { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: 0 };
+    d.date = today; d.tasks = genTasks(today, this.baseCps); d.claimed = []; d.prog = { clicks: 0, golden: 0, buildings: 0, upgrades: 0, baked: ZERO };
     return true;
   }
   get streak() { const d = this.daily; return d.lastDone === dayKey() || d.lastDone === yesterdayKey() ? d.streak : 0; }
   dailyRewardCookies() { return this.baseCps.mulN(600).max(1000).mulN(1 + 0.1 * Math.min(this.streak, 10)); }
-  dailyState() { const d = this.daily; return d.tasks.map((t, i) => ({ ...t, i, prog: Math.min(t.target, d.prog[t.type] || 0), done: (d.prog[t.type] || 0) >= t.target, claimed: d.claimed.includes(i) })); }
+  dailyState() {
+    const d = this.daily;
+    return d.tasks.map((t, i) => {
+      const claimed = d.claimed.includes(i);
+      if (t.type === 'baked') { // Kekse können riesig sein: als Big vergleichen
+        const tg = Big.parse(t.target), pr = Big.parse(d.prog.baked);
+        return { ...t, i, target: tg, prog: pr.min(tg), ratio: Math.min(1, pr.div(tg).toNumber()), done: pr.gte(tg), claimed };
+      }
+      const pr = Math.min(t.target, d.prog[t.type] || 0);
+      return { ...t, i, prog: pr, ratio: pr / t.target, done: (d.prog[t.type] || 0) >= t.target, claimed };
+    });
+  }
   claimableCount() { return this.dailyState().filter((t) => t.done && !t.claimed).length; }
   claimDaily(i) {
     const t = this.dailyState()[i]; if (!t || !t.done || t.claimed) return null;
@@ -268,7 +278,7 @@ export class Game {
     }
     return { reward, bonus };
   }
-  unlockStats() { return { ach: this.achCount(), golden: this.golden, totalAll: this.totalReset.add(this.total).toNumber(), ascensions: this.ascensions, upgrades: this.upgradeCount, buildings: this.owned.reduce((a, b) => a + b, 0), clicks: this.clicks, chips: this.chipsEarned, items: this.items, itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0) }; }
+  unlockStats() { return { ach: this.achCount(), golden: this.golden, totalAll: this.totalReset.add(this.total).toNumber(), ascensions: this.ascensions, upgrades: this.upgradeCount, buildings: this.owned.reduce((a, b) => a + b, 0), clicks: this.clicks, chips: this.chipsEarned.toNumber(), items: this.items, itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0) }; }
   unlockedSkins() { const st = this.unlockStats(); return SKINS.filter((k) => k.need(st)).map((k) => k.id); }
   setSkin(id) { if (this.unlockedSkins().includes(id)) { this.skin = id; return true; } return false; }
 
@@ -325,7 +335,7 @@ export class Game {
         this.cookies = neg ? this.cookies.sub(v) : this.cookies.add(v).clamp();
         return !neg ? 'Du bekommst Kekse geschenkt!' : 'Dir wurden Kekse abgezogen.';
       }
-      case 'chips': this.chipsEarned += ev.amount; this.updateCps(); return `+${ev.amount} Himmelschips!`;
+      case 'chips': this.chipsEarned = this.chipsEarned.add(ev.amount); this.updateCps(); return `+${ev.amount} Himmelschips!`;
       case 'building': this.owned[ev.b] += ev.amount; this.updateCps(); return `+${ev.amount}× ${BUILDINGS[ev.b].name}!`;
       case 'buff': this.buffs.push({ type: ev.kind, mult: ev.mult, until: Date.now() + ev.seconds * 1000 }); return `${ev.kind === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${ev.mult} für ${ev.seconds} s!`;
       case 'achievements': this.ach.fill(1); this.updateCps(); return 'Alle Erfolge freigeschaltet!';
@@ -342,12 +352,16 @@ export class Game {
   }
 
   // ---- Aufstieg ----
-  get chipsPotential() { return Math.min(CHIP_CAP, Math.floor(Math.cbrt(this.totalReset.add(this.total).toNumber() / 1e12))); }
-  get chipsGain() { return Math.max(0, this.chipsPotential - this.chipsEarned); }
+  get chipsPotential() { // ³√(Gesamt-Kekse / 1e12), abgerundet – bei riesigen Werten über den Logarithmus
+    const all = this.totalReset.add(this.total); const n = all.toNumber();
+    if (n < 1e300) return Big.from(Math.floor(Math.cbrt(n / 1e12)));
+    return Big.fromLog((all.log10() - 12) / 3).floor();
+  }
+  get chipsGain() { return this.chipsPotential.sub(this.chipsEarned); }
   ascend() {
     const gain = this.chipsGain;
-    if (gain < 1) return false;
-    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = Math.min(CHIP_CAP, this.chipsEarned + gain); this.ascensions++;
+    if (gain.lt(1)) return false;
+    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++;
     this.cookies = ZERO; this.total = ZERO;
     this.owned.fill(0);
     this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);
@@ -359,7 +373,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0), seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned };
+    const s = { itemCount: Object.keys(this.items).length, itemTotal: Object.values(this.items).reduce((a, b) => a + b, 0), seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
@@ -371,7 +385,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      chipsEarned: this.chipsEarned, chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
+      chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
     };
   }
   load(d) {
@@ -384,7 +398,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.ascensions = num(d.ascensions); this.chipsEarned = Math.min(CHIP_CAP, num(d.chipsEarned)); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
+    this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
     if (Array.isArray(d.series)) this.series = Array.from({ length: SERIES_COUNT }, (_, i) => { const n = Number(d.series[i]); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), SERIES_LEVELS) : 0; });
@@ -398,8 +412,8 @@ export class Game {
     else if (d.items && typeof d.items === 'object') { this.items = {}; for (const [id, n] of Object.entries(d.items)) if (itemById(id) && Number.isInteger(n) && n > 0) this.items[id] = Math.min(n, 1e9); }
     const dl = d.daily;
     if (dl && typeof dl.date === 'string' && Array.isArray(dl.tasks)) {
-      this.daily = { date: dl.date, tasks: dl.tasks.filter((t) => t && typeof t.type === 'string' && Number.isFinite(t.target)).slice(0, 3), claimed: Array.isArray(dl.claimed) ? dl.claimed.filter(Number.isInteger) : [], streak: num(dl.streak), lastDone: typeof dl.lastDone === 'string' ? dl.lastDone : '',
-        prog: { clicks: num(dl.prog && dl.prog.clicks), golden: num(dl.prog && dl.prog.golden), buildings: num(dl.prog && dl.prog.buildings), upgrades: num(dl.prog && dl.prog.upgrades), baked: num(dl.prog && dl.prog.baked) } };
+      this.daily = { date: dl.date, tasks: dl.tasks.filter((t) => t && typeof t.type === 'string' && (Number.isFinite(t.target) || (t.type === 'baked' && typeof t.target === 'string'))).slice(0, 3), claimed: Array.isArray(dl.claimed) ? dl.claimed.filter(Number.isInteger) : [], streak: num(dl.streak), lastDone: typeof dl.lastDone === 'string' ? dl.lastDone : '',
+        prog: { clicks: num(dl.prog && dl.prog.clicks), golden: num(dl.prog && dl.prog.golden), buildings: num(dl.prog && dl.prog.buildings), upgrades: num(dl.prog && dl.prog.upgrades), baked: Big.parse(dl.prog && dl.prog.baked) } };
     }
     this.recalc();
     return this.catchUp((Date.now() - this.last) / 1000, 30);
