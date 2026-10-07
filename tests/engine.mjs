@@ -159,3 +159,19 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const dd = new Game(); dd.load(JSON.parse(JSON.stringify(d.serialize()))); assert.equal(dd.daily.tasks.length, 3);
   console.log('Keine-Obergrenze-Test OK');
 }
+
+// ---- Singularität: endlose Stufen ----
+{
+  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(100000); g.items = { icetea: 1e9 }; g.recalc();
+  assert.ok(g.singAvailable && g.baseCps.log10() > 100);
+  const l0 = g.baseCps.log10(); g.cookies = B('1e5'); assert.equal(g.buySing(), false, 'zu teuer');
+  g.cookies = g.singCost.mulN(2); assert.ok(g.buySing() && g.sing === 1);
+  assert.ok(Math.abs(g.baseCps.log10() / l0 - 1.02) < 1e-6, 'Exponent × 1,02');
+  // Preis wächst mit der Produktion: jede weitere Stufe ist erreichbar, es gibt kein Ende
+  for (let i = 0; i < 300; i++) { g.cookies = g.singCost.mulN(1.5); assert.ok(g.buySing(), 'Stufe ' + g.sing); }
+  assert.equal(g.sing, 301); assert.ok(g.baseCps.log10() > l0 * 300 && Number.isFinite(g.baseCps.log10()), 'wächst weiter');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.sing, 301); assert.ok(Math.abs(sv.baseCps.log10() / g.baseCps.log10() - 1) < 1e-9, 'Speichern');
+  g.total = B('1e200'); g.cookies = B('1e200'); g.ascend(); assert.equal(g.sing, 301, 'bleibt beim Aufstieg');
+  const young = new Game(); young.owned[0] = 10; young.recalc(); young.cookies = B('1e50'); assert.equal(young.buySing(), false, 'erst ab 1e100/s');
+  console.log('Singularitäts-Test OK');
+}

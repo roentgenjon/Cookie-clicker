@@ -6,6 +6,9 @@ import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGR
 export const ACH = buildAchievements();
 // Kekse, Produktion und Preise sind Big-Zahlen (ohne Obergrenze). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
 const LG = { tierBig: Math.log10(EFFECT.tierBig), tierSmall: Math.log10(EFFECT.tierSmall), click: Math.log10(EFFECT.click), global: Math.log10(EFFECT.global), hGlobal: Math.log10(EFFECT.hGlobal), hClick: Math.log10(EFFECT.hClick) };
+// Singularität: endlose Stufen. Jede Stufe hebt die gesamte Produktion in die Potenz 1,02 (Exponent ×1,02) und kostet
+// 60 Sekunden Produktion × 1,03^Stufe – der Preis wächst mit der Produktion mit, dadurch gibt es immer eine nächste Stufe.
+export const SING_POW = 1.02; export const SING_COST = 1.03; export const SING_SECS = 60; export const SING_MIN_LOG = 100; // ab Produktion 1e100 verfügbar
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
 const toB64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s); };
@@ -48,6 +51,7 @@ export class Game {
     this.bought = new Uint8Array(TOTAL_UPGRADES);
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
+    this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
     this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
@@ -146,7 +150,19 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    this.baseCps = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN((1 + 0.002 * this.achCount()) * this.itemMult);
+    let base = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN((1 + 0.002 * this.achCount()) * this.itemMult);
+    if (this.sing > 0 && !base.isZero()) base = Big.fromLog(base.log10() * Math.pow(SING_POW, this.sing)); // Singularität: Produktion hoch 1,02^Stufe
+    this.baseCps = base;
+  }
+  // ---- Singularität ----
+  get singAvailable() { return !this.baseCps.isZero() && this.baseCps.log10() >= SING_MIN_LOG; }
+  get singCost() { return this.baseCps.mulN(SING_SECS * Math.pow(SING_COST, this.sing)); }
+  get singPower() { return Math.pow(SING_POW, this.sing); }
+  buySing() {
+    if (!this.singAvailable) return false;
+    const cost = this.singCost; if (cost.gt(this.cookies)) return false;
+    this.cookies = this.cookies.sub(cost); this.sing++; this.updateCps();
+    return true;
   }
   get itemMult() { return itemMultiplier(this.items); }
   // ---- Sound-Shop ----
@@ -385,7 +401,7 @@ export class Game {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
-      chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
+      sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, items: this.items, sounds: this.sounds, series: this.series,
     };
   }
   load(d) {
@@ -398,6 +414,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
+    this.sing = Math.floor(num(d.sing));
     this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
