@@ -341,20 +341,40 @@ async function loadLb(by = lbBy) {
 }
 function cloudSave(keepalive = false, setup) {
   if (banned || Date.now() < limitUntil) return Promise.resolve();
-  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(e.data.reason); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
+  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
 let banned = false; let lastHideSave = 0; let limitUntil = 0;
 // Bann: schwarzer Bildschirm über allem (auch über offenen Fenstern), keine Bedienung, kein Abmelden. Das Merkmal bleibt nach Neuladen erhalten und wird beim Start geprüft.
-function showBanScreen(reason) {
+function showBanScreen(reason, appeal) {
   banned = true; if (typeof reason === 'string') { if (reason) ls.set('cc_ban_reason', reason); else ls.del('cc_ban_reason'); }
   $('#banReason').textContent = ls.get('cc_ban_reason') || ''; try { if (modal.open) modal.close(); } catch { /* egal */ }
   const el = $('#banScreen'); try { el.hidePopover(); } catch { /* egal */ } try { el.showPopover(); } catch { el.style.display = 'flex'; }
   document.title = 'Gebannt';
+  $('#banAppeal').classList.toggle('hidden', !cloud.loggedIn);
+  if (appeal !== undefined) showAppeal(appeal);
+  if (!banTimer && cloud.loggedIn) banTimer = setInterval(banCheck, 30000);
 }
-function onBanned(reason) { if (banned) { if (reason) showBanScreen(reason); return; } if (cloud.loggedIn) ls.set('cc_banned', '1'); showBanScreen(reason || ''); }
-['keydown', 'keyup', 'pointerdown', 'click', 'contextmenu'].forEach((t) => document.addEventListener(t, (e) => { if (banned) { e.preventDefault(); e.stopImmediatePropagation(); } }, true));
+let banTimer = null;
+function showAppeal(ap) {
+  $('#appealState').innerHTML = ap ? `Dein Einspruch: „${esc(ap.text)}“${ap.reply ? `\n<b>Antwort der Admins:</b> ${esc(ap.reply)}` : '\nWird von den Admins geprüft …'}` : '';
+}
+// Alle 30 s prüfen: ist der Bann vorbei (z. B. Bann auf Zeit oder von einem Admin aufgehoben)? Dann wieder frei; sonst Grund und Antwort aktualisieren.
+function banCheck() {
+  cloud.events(0).then(() => { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); }).catch((e) => {
+    if (e.data && e.data.banned) showBanScreen(e.data.reason || '', e.data.appeal || null);
+    else if (e.status === 404 || (e.status === 403 && !(e.data && e.data.banned))) { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); }
+  });
+}
+function onBanned(reason, appeal) { if (banned) { if (reason) showBanScreen(reason, appeal || null); return; } if (cloud.loggedIn) ls.set('cc_banned', '1'); showBanScreen(reason || '', appeal || null); }
+['keydown', 'keyup', 'pointerdown', 'click', 'contextmenu'].forEach((t) => document.addEventListener(t, (e) => { if (banned && !(e.target.closest && e.target.closest('#banAppeal'))) { e.preventDefault(); e.stopImmediatePropagation(); } }, true));
+$('#appealSend').addEventListener('click', async () => {
+  const ta = $('#appealText'); const text = ta.value.trim(); if (text.length < 3) { $('#appealState').textContent = 'Bitte schreibe etwas mehr.'; return; }
+  $('#appealSend').disabled = true;
+  try { await cloud.appeal(text); ta.value = ''; showAppeal({ text, reply: '' }); } catch (e) { $('#appealState').textContent = '❌ ' + e.message; }
+  $('#appealSend').disabled = false;
+});
 if (ls.get('cc_banned') === '1') {
-  if (cloud.loggedIn) { showBanScreen(); cloud.events(0).then(() => { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); }).catch((e) => { if (e.data && e.data.banned) showBanScreen(e.data.reason || ''); else if (e.status === 404 || (e.status === 403 && !(e.data && e.data.banned))) { ls.del('cc_banned'); ls.del('cc_ban_reason'); location.reload(); } }); }
+  if (cloud.loggedIn) { showBanScreen(); banCheck(); }
   else { ls.del('cc_banned'); ls.del('cc_ban_reason'); }
 }
 
@@ -384,7 +404,7 @@ async function pollEvents() {
     for (const ev of r.events || []) handleEvent(ev, ev.from);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
     if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
-  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason); }
+  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); }
 }
 let evTimer = null;
 function startEvents() {
@@ -410,7 +430,7 @@ updateCloudBtn();
   try {
     const r = await cloud.load();
     if (r.data && r.data.last > localLast + 1000) { const o = game.load(r.data); game.name = cloud.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); if (!o.gain.isZero()) toast(`☁️ Cloud-Stand geladen. Offline (${fmtTime(o.offlineSecs)}): <b>+${fmt(o.gain)}</b> Kekse`); }
-  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason); else if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
+  } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); else if (e.status === 403) { cloud.logout(); updateCloudBtn(); toast('❌ Anmeldung abgelaufen – bitte neu anmelden'); } }
 })();
 
 // ---------- Hauptschleife ----------

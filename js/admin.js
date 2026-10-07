@@ -27,8 +27,9 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['manage', '⚙️ Verwaltung']];
-const GLOBAL_TABS = ['sched', 'admins']; // gelten nicht für einen einzelnen Spieler
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
+const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals'];
+const DURATIONS = [[0, 'Dauerhaft'], [60, '1 Stunde'], [360, '6 Stunden'], [1440, '24 Stunden'], [10080, '7 Tage'], [43200, '30 Tage']]; // gelten nicht für einen einzelnen Spieler
 const localInput = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const fld = (label, html, hint = '') => `<label class="fld"><span>${label}</span>${html}${hint ? `<small>${hint}</small>` : ''}</label>`;
 
@@ -37,7 +38,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.closest('dialog')?.classList.add('wide');
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
-  let players = []; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  let players = []; let banItems = null; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -49,8 +50,8 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   }
   async function refresh() {
     try {
-      const [p, s] = await Promise.all([cloud.admin('players'), cloud.admin('stats')]);
-      players = p.players; stats = s; now = p.now;
+      const [p, s, ap] = await Promise.all([cloud.admin('players'), cloud.admin('stats'), cloud.admin('appealList').catch(() => ({ items: [] }))]);
+      players = p.players; stats = s; now = p.now; stats.appeals = ap.items.filter((x) => x.o).length;
     } catch (e) { root.textContent = '❌ ' + e.message + ' (nur Admins haben Zugriff)'; return false; }
     return true;
   }
@@ -78,8 +79,12 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     return e.type || '?';
   };
   async function loadSched() { try { schedItems = (await cloud.admin('schedList')).items; } catch { schedItems = []; } }
+  async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
+  async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
   async function loadAdmins() { try { adminData = await cloud.admin('adminList'); } catch (e) { adminData = { error: e.message }; } }
-  const online = (p) => now - p.updated < 120000;
+  const online = (p) => !!p.online;
+  const ago = (t) => new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const durText = (m) => (m ? (DURATIONS.find(([v]) => v === m) || [0, m + ' Min'])[1] : 'dauerhaft');
   function paneHtml() {
     const all = sel === ALL;
     switch (tab) {
@@ -121,6 +126,20 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <button class="adm-go" data-act="schedAdd">⏰ Planen</button>
         <div class="adm-sec"><h4>Geplant (${schedItems ? schedItems.length : '…'})</h4>${items}</div>`;
       }
+      case 'banlog': {
+        if (!banItems) return '<div class="adm-empty">Lade…</div>';
+        if (!banItems.length) return '<div class="adm-hint">Noch keine Sperren protokolliert.</div>';
+        return `<div class="adm-hint">Die letzten ${banItems.length} Sperren, Änderungen und Entsperrungen.</div>${banItems.map((x) => {
+          const icon = x.action === 'unban' ? '✅' : x.action === 'edit' ? '✏️' : '🚫';
+          const left = x.action !== 'unban' && x.until ? (x.until > Date.now() ? `bis ${ago(x.until)}` : 'abgelaufen') : x.action === 'unban' ? '' : 'dauerhaft';
+          return `<div class="adm-sched"><span>${icon} ${ago(x.t)}</span><span><b>${esc(x.name)}</b> · ${x.action === 'unban' ? 'entsperrt' : durText(x.minutes) + (left ? ' (' + left + ')' : '')} · von ${esc(x.by)}${x.reason ? `<br><small>„${esc(x.reason)}“</small>` : ''}</span><span></span></div>`;
+        }).join('')}`;
+      }
+      case 'appeals': {
+        if (!appealItems) return '<div class="adm-empty">Lade…</div>';
+        if (!appealItems.length) return '<div class="adm-hint">Keine Einsprüche.</div>';
+        return `<div class="adm-hint">Einsprüche gesperrter Spieler. Antworten sehen sie auf ihrem schwarzen Bildschirm.</div>${appealItems.map((x) => `<div class="adm-sec"><h4>${x.o ? '📨' : '✅'} ${esc(x.n || x.id)} <small>${ago(x.t)}</small></h4><div class="note">„${esc(x.x || '')}“</div>${x.r ? `<div class="note"><b>Deine Antwort:</b> ${esc(x.r)}</div>` : ''}<div class="adm-grid">${fld('Antwort', `<input type="text" id="ar_${x.id}" maxlength="300" placeholder="Antwort an den Spieler" value="${esc(x.r || '')}">`)}<div class="adm-btns wrap"><button data-act="apReply" data-id="${x.id}">💬 Antworten</button><button data-act="apUnban" data-id="${x.id}">✅ Entbannen</button><button class="danger" data-act="apDel" data-id="${x.id}">🗑️</button></div></div></div>`).join('')}`;
+      }
       case 'admins': {
         if (!adminData) return '<div class="adm-empty">Lade…</div>';
         if (adminData.error) return `<div class="adm-hint">${esc(adminData.error)}</div>`;
@@ -135,7 +154,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return `
         <div class="adm-sec"><h4>🔎 Spielstand</h4><button data-act="inspect">📋 Spielstand ansehen</button>${info ? `<pre>${esc(info)}</pre>` : ''}</div>
         <div class="adm-sec"><h4>🔇 Chat</h4><div class="adm-btns wrap"><button data-act="mute" data-min="10">10 Min stumm</button><button data-act="mute" data-min="60">1 Std stumm</button><button data-act="mute" data-min="1440">24 Std stumm</button><button data-act="mute" data-min="0">${cur && cur.muted ? '🔊 Stumm aufheben' : 'Stumm aufheben'}</button></div><small class="adm-small">Stumme Spieler können im Chat nicht schreiben. Einzelne Nachrichten löschst du direkt im Chat mit 🗑️.</small></div>
-        <div class="adm-sec"><h4>🚫 Zugang</h4><label class="fld"><span>Bann-Nachricht (wird dem Spieler auf dem schwarzen Bildschirm angezeigt)</span><textarea id="banMsg" rows="2" maxlength="300" placeholder="z. B. Beleidigungen im Chat"></textarea></label><div class="adm-btns wrap"><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button>${cur && cur.banned ? '<button data-act="banmsg">💾 Nachricht ändern</button>' : ''}</div><small class="adm-small">Gesperrte Spieler sehen einen schwarzen Bildschirm mit „Du wurdest gebannt“ und deiner Nachricht, können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
+        <div class="adm-sec"><h4>🚫 Zugang</h4>${fld('Dauer', `<select id="banDur">${DURATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>`, 'Bann auf Zeit endet von selbst')}<label class="fld"><span>Bann-Nachricht (wird dem Spieler auf dem schwarzen Bildschirm angezeigt)</span><textarea id="banMsg" rows="2" maxlength="300" placeholder="z. B. Beleidigungen im Chat"></textarea></label><div class="adm-btns wrap"><button data-act="ban">${cur && cur.banned ? '✅ Konto entsperren' : '🚫 Konto sperren'}</button>${cur && cur.banned ? '<button data-act="banmsg">💾 Nachricht ändern</button>' : ''}</div><small class="adm-small">Gesperrte Spieler sehen einen schwarzen Bildschirm mit „Du wurdest gebannt“ und deiner Nachricht, können nichts mehr speichern und verschwinden aus der Rangliste.</small></div>
         <div class="adm-sec danger-zone"><h4>⚠️ Gefahrenzone</h4><div class="adm-btns wrap"><button class="danger" data-act="reset">♻️ Spielstand zurücksetzen</button><button class="danger" data-act="del">🗑️ Konto löschen</button></div></div>`;
       }
     }
@@ -147,7 +166,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const list = players.filter((p) => !f || p.name.toLowerCase().includes(f));
     const cur = players.find((p) => p.id === sel);
     root.innerHTML = `
-      <div class="adm-top"><span class="chip">👥 ${stats.players} Spieler</span><span class="chip good">🟢 ${stats.online} online</span><span class="chip ${stats.banned ? 'bad' : ''}">🚫 ${stats.banned} gesperrt</span><span class="chip">🍪 ${fmt(stats.totalCookies)} gebacken</span></div>
+      <div class="adm-top"><span class="chip">👥 ${stats.players} Spieler</span><span class="chip good">🟢 ${stats.online} online</span><span class="chip ${stats.banned ? 'bad' : ''}">🚫 ${stats.banned} gesperrt</span>${stats.appeals ? `<span class="chip bad">📨 ${stats.appeals} Einspruch${stats.appeals > 1 ? 'e' : ''}</span>` : ''}<span class="chip">🍪 ${fmt(stats.totalCookies)} gebacken</span></div>
       <div class="adm-cols">
         <aside class="adm-side">
           <div class="adm-search"><input type="text" id="q" placeholder="🔍 Spieler suchen…" value="${esc(q)}"><button id="reload" title="Liste aktualisieren">🔄</button></div>
@@ -175,7 +194,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const row = e.target.closest('.adm-row[data-id]');
     if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -242,12 +261,17 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'ban': {
         const p = players.find((x) => x.id === sel);
         const reason = (root.querySelector('#banMsg') || {}).value || '';
-        try { await call('ban', { target: sel, banned: !p.banned, reason }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
+        const minutes = +((root.querySelector('#banDur') || {}).value || 0);
+        try { await call('ban', { target: sel, banned: !p.banned, reason, minutes }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
         return paint();
       }
+      case 'apReply': { const id = btn.dataset.id; const text = (root.querySelector('#ar_' + id) || {}).value || ''; try { await call('appealReply', { target: id, text }); say('Antwort gesendet'); await loadAppeals(); } catch { return; } return paint(); }
+      case 'apUnban': { const id = btn.dataset.id; try { await call('ban', { target: id, banned: false }); say('Entbannt'); await loadAppeals(); await refresh(); } catch { return; } return paint(); }
+      case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
         const p = players.find((x) => x.id === sel); const reason = (root.querySelector('#banMsg') || {}).value || '';
-        try { await call('ban', { target: sel, banned: true, reason }); say(`Bann-Nachricht für ${p.name} geändert`); } catch { return; }
+        const minutes = +((root.querySelector('#banDur') || {}).value || 0);
+        try { await call('ban', { target: sel, banned: true, reason, minutes, keep: true }); say(`Bann-Nachricht für ${p.name} geändert`); } catch { return; }
         return paint();
       }
       case 'reset': {

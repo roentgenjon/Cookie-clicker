@@ -15,6 +15,8 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
   let seen = Number(ls.get('cc_chat_seen')) || 0;
   let dmSeen = {}; try { dmSeen = JSON.parse(ls.get('cc_dm_seen') || '{}'); } catch { dmSeen = {}; }
   let busy = false; let picking = false;
+  let online = new Set(); // Namen (klein) der Spieler, die gerade online sind
+  const isOn = (name) => online.has(String(name).toLowerCase());
 
   const myId = () => cloud.id;
   const mineGlobal = (m) => cloud.loggedIn && m.n === cloud.name;
@@ -36,7 +38,7 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
     const el = document.createElement('div'); const g = active === 'global';
     const mine = g ? mineGlobal(m) : m.f === myId();
     el.className = 'cm' + (mine ? ' me' : ''); el.dataset.mid = m.i;
-    const who = g ? `<b class="${m.a ? 'adm' : ''}">${m.a ? '🛡️ ' : ''}${esc(m.n)}</b>` : `<b>${mine ? 'Du' : esc((convs.find((c) => c.id === active) || {}).name || '?')}</b>`;
+    const who = g ? `<b class="${m.a ? 'adm' : ''}" data-n="${esc(String(m.n).toLowerCase())}"><i class="od ${isOn(m.n) ? 'on' : ''}"></i>${m.a ? '🛡️ ' : ''}${esc(m.n)}</b>` : `<b>${mine ? 'Du' : esc((convs.find((c) => c.id === active) || {}).name || '?')}</b>`;
     el.innerHTML = `<div class="cm-h">${who}<span>${time(m.t)}</span>${g && isAdmin() ? `<button class="cm-del" data-mid="${m.i}" title="Nachricht löschen">🗑️</button>` : ''}</div><div class="cm-t">${esc(m.x)}</div>`;
     return el;
   }
@@ -69,14 +71,25 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
     const side = body.querySelector('#csList'); if (!side) return;
     const gUn = globalUnread();
     side.innerHTML = `<button class="cs-item ${active === 'global' ? 'active' : ''}" data-c="global"><span class="cs-ic">🌍</span><span class="cs-n">Allgemein</span>${gUn && active !== 'global' ? `<span class="badge">${gUn > 9 ? '9+' : gUn}</span>` : ''}</button>`
-      + (cloud.loggedIn ? convs.map((c) => `<button class="cs-item ${active === c.id ? 'active' : ''}" data-c="${c.id}"><span class="cs-ic">👤</span><span class="cs-n">${esc(c.name)}${c.lastText ? `<small>${c.lastFrom === myId() ? 'Du: ' : ''}${esc(c.lastText)}</small>` : ''}</span>${convUnread(c) && active !== c.id ? '<span class="dotu"></span>' : ''}</button>`).join('') : '');
+      + (cloud.loggedIn ? convs.map((c) => `<button class="cs-item ${active === c.id ? 'active' : ''}" data-c="${c.id}"><span class="cs-ic">👤</span><span class="cs-n"><i class="od ${isOn(c.name) ? 'on' : ''}"></i>${esc(c.name)}${c.lastText ? `<small>${c.lastFrom === myId() ? 'Du: ' : ''}${esc(c.lastText)}</small>` : ''}</span>${convUnread(c) && active !== c.id ? '<span class="dotu"></span>' : ''}</button>`).join('') : '');
   }
   function paintHeader() {
     if (!body) return;
     const t = body.querySelector('#chatTitle'); if (!t) return;
     const c = convs.find((x) => x.id === active);
-    t.textContent = active === 'global' ? '🌍 Allgemeiner Chat (für alle)' : `🔒 Privater Chat mit ${c ? c.name : '…'}`;
+    t.textContent = active === 'global' ? '🌍 Allgemeiner Chat (für alle)' : `🔒 Privater Chat mit ${c ? c.name : '…'}${c && isOn(c.name) ? ' 🟢 online' : ''}`;
     const inp = body.querySelector('#chatIn'); if (inp) inp.placeholder = active === 'global' ? 'Nachricht an alle…' : `Nachricht an ${c ? c.name : '…'}…`;
+  }
+
+  // ---------- Online-Anzeige ----------
+  function applyOnline() {
+    if (!body) return;
+    body.querySelectorAll('#chatList [data-n]').forEach((b) => { const i = b.querySelector('.od'); if (i) i.classList.toggle('on', online.has(b.dataset.n)); });
+    paintSide(); paintHeader();
+  }
+  async function pollOnline() {
+    if (!cloud.enabled) return;
+    try { online = new Set((await cloud.online()).online.map((n) => String(n).toLowerCase())); applyOnline(); } catch { /* egal */ }
   }
 
   // ---------- Abruf ----------
@@ -171,6 +184,7 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
       timers.forEach(clearInterval); timers = [];
       timers.push(setInterval(() => { if (active === 'global') pollGlobal(); else pollActive(); }, 5000));
       timers.push(setInterval(pollConvs, 10000));
+      timers.push(setInterval(pollOnline, 30000)); pollOnline();
       pollGlobal(); pollConvs();
       el.querySelector('#chatForm')?.addEventListener('submit', async (e) => {
         e.preventDefault(); const inp = el.querySelector('#chatIn'); const t = inp.value.trim(); if (!t) return;
