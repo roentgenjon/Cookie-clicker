@@ -212,3 +212,8 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 #banScreen .ban-reason{margin:.4em auto 1em;max-width:min(88vw,560px);padding:.7em 1em;border-left:4px solid #ff4d4d;background:#ffffff14;border-radius:8px;font-style:italic;white-space:pre-wrap;word-break:break-word;opacity:1}#banScreen .ban-reason:empty{display:none}
 .od{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#6b6b6b;vertical-align:middle}.od.on{background:#3ddc84;box-shadow:0 0 6px #3ddc84}
 #banAppeal{margin:1.2em auto 0;width:min(88vw,520px);display:flex;flex-direction:column;gap:8px;text-align:left}#banAppeal textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font:inherit}#banAppeal button{padding:10px 14px;border-radius:10px;border:0;background:#ff4d4d;color:#000;font-weight:700;cursor:pointer}#appealState{font-size:.95rem;opacity:.9;white-space:pre-wrap;word-break:break-word}#appealState b{color:#7ee787}
+
+/* ---- Umfragen ---- */
+.poll{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg2);display:flex;flex-direction:column;gap:6px}.poll h4{margin:0;font-size:1.05rem}.poll.done{opacity:.8}
+.po{position:relative;overflow:hidden;display:flex;justify-content:space-between;gap:10px;text-align:left;padding:10px 12px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 45%,transparent) var(--w),var(--panel) var(--w))}
+.po.mine{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.po b{white-space:nowrap}
