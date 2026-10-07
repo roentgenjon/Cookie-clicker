@@ -1,5 +1,5 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
-import { SKINS, TASK_INFO, ITEMS, itemCost, itemMaxAffordable, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
+import { SKINS, TASK_INFO, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseBig } from './admin.js';
@@ -57,31 +57,6 @@ export async function renderGift(body, { game, fmt, toast, title, save }) {
     } catch (err) { msg('❌ ' + err.message); }
     body.querySelector('#gGo').disabled = false;
   });
-}
-
-let itemAmt = 1; // 1 / 10 / 100 / 'max'
-const itemN = (it, game) => (itemAmt === 'max' ? Math.max(1, itemMaxAffordable(it, game.itemCount(it.id), game.cookies)) : itemAmt);
-// Schlüssel für das Neuzeichnen: ändert sich, wenn sich Besitz oder Leistbarkeit ändert
-export function itemsStateKey(game) { return JSON.stringify(game.items) + itemAmt + ITEMS.map((it) => (game.cookies.gte(itemCost(it, game.itemCount(it.id), itemN(it, game))) ? 1 : 0)).join(''); }
-
-export function renderItems(body, { game, fmt, toast, title, changed, buySound }) {
-  title('🛒 Item-Shop');
-  const pctTotal = Math.round((game.itemMult - 1) * 100);
-  const total = Object.values(game.items).reduce((a, b) => a + b, 0);
-  body.innerHTML = `<div class="stack">
-    <div class="shop-top"><div><b>Dein Bonus: +${pctTotal.toLocaleString('de-DE')} %</b><div class="note">auf Kekse pro Sekunde und Klickertrag · ${total.toLocaleString('de-DE')} Items</div></div>
-      <div class="seg" id="itemAmt">${[1, 10, 100, 'max'].map((n) => `<button data-n="${n}" class="${n === itemAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
-    <p class="note">Items kannst du <b>beliebig oft</b> kaufen, jedes Exemplar gibt den Bonus dazu. Der Preis steigt mit jedem Exemplar um 12 %. Alles <b>bleibt beim Aufstieg erhalten</b>. Du hast ${fmt(game.cookies)} 🍪</p>
-    <div class="items">${ITEMS.map((it) => {
-      const have = game.itemCount(it.id); const n = itemN(it, game); const cost = itemCost(it, have, n); const can = game.cookies.gte(cost);
-      return `<div class="item ${have ? 'has' : ''} ${it.best ? 'best' : ''}"><div class="ie">${it.emoji}</div><div class="in"><b>${it.name}</b>${it.best ? ' <span class="tag">BESTES ITEM</span>' : ''}<div class="ip">+${it.pct.toLocaleString('de-DE')} % Kekse je Stück</div><div class="have">Du hast: <b>${have.toLocaleString('de-DE')}</b>${have ? ` (+${(have * it.pct).toLocaleString('de-DE')} %)` : ''}</div></div><button data-item="${it.id}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${fmt(cost)}</button></div>`;
-    }).join('')}</div></div>`;
-  const redraw = () => renderItems(body, { game, fmt, toast, title, changed, buySound });
-  body.querySelector('#itemAmt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; itemAmt = b.dataset.n === 'max' ? 'max' : +b.dataset.n; redraw(); });
-  body.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => {
-    const it = ITEMS.find((x) => x.id === b.dataset.item); const got = game.buyItem(it.id, itemN(it, game));
-    if (got) { buySound(); toast(`🛒 ${got.toLocaleString('de-DE')}× <b>${it.emoji} ${it.name}</b> gekauft: +${(got * it.pct).toLocaleString('de-DE')} % Kekse!`); changed(); redraw(); }
-  }));
 }
 
 let soundTab = 'pack';

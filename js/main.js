@@ -5,10 +5,10 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift, renderItems, itemsStateKey, renderSoundShop, renderMega, megaStateKey } from './features.js';
+import { renderDaily, renderSkins, renderGift, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT } from './mega.js';
-import { skinById, itemById } from './extras.js';
-let itemsKey = ''; let megaKey = '';
+import { skinById } from './extras.js';
+let megaKey = '';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -78,12 +78,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { if (isSpace(e)) { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
 addEventListener('blur', stopHold);
 
-// ---------- Besessene Items unter dem Keks ----------
-let itemBarKey = '';
-function renderItemBar() {
-  const key = JSON.stringify(game.items); if (key === itemBarKey) return; itemBarKey = key;
-  $('#itemBar').innerHTML = Object.entries(game.items).map(([id, n]) => { const it = itemById(id); return `<span title="${it.name} ×${n} (+${n * it.pct} %)">${it.emoji}<small>${n > 999 ? '999+' : n}</small></span>`; }).join('');
-}
 
 // ---------- Gewählte Klänge/Musik aus dem Spielstand anwenden ----------
 function applySounds() { sound.setPack(game.sounds.pack); sound.setTrack(game.sounds.track); }
@@ -96,7 +90,7 @@ function applySkin() {
   const k = skinById(game.skin); const f = $('#cookieFace');
   f.textContent = k.emoji; f.style.filter = k.filter || ''; f.classList.toggle('rainbow', !!k.cls);
 }
-applySkin(); renderItemBar();
+applySkin();
 let rain = ls.get('cc_rain') === null ? !matchMedia('(prefers-reduced-motion: reduce)').matches : ls.get('cc_rain') === '1';
 setInterval(() => {
   const host = $('#rain'); if (!rain || document.hidden || host.children.length > 14) return;
@@ -267,7 +261,6 @@ function renderModal() {
   else if (modalKind === 'settings') renderSettings();
   else if (modalKind === 'daily') renderDaily($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { saveLocal(); $('#dailyBadge').textContent = game.claimableCount() || ''; lastKey = ''; } });
   else if (modalKind === 'mega') renderMega($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { lastKey = ''; saveLocal(); }, buySound: () => sound.buy() });
-  else if (modalKind === 'items') renderItems($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { renderItemBar(); applySkin(); saveLocal(); }, buySound: () => sound.shop() });
   else if (modalKind === 'sounds') renderSoundShop($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => saveLocal(), buySound: () => sound.shop(), apply: applySounds, preview: (kind, id) => (kind === 'pack' ? sound.previewPack(id) : sound.previewTrack(id)) });
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
@@ -441,7 +434,7 @@ function frame(now) {
   }
   saveT += dt; cloudT += dt;
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
-    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); applySounds(); if (modalKind === 'daily') renderModal(); if (modalKind === 'mega') { const k = megaStateKey(game); if (k !== megaKey) { megaKey = k; renderModal(); } } if (modalKind === 'items') { const k = itemsStateKey(game); if (k !== itemsKey) { itemsKey = k; renderModal(); } } renderItemBar(); $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
+    $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); applySounds(); if (modalKind === 'daily') renderModal(); if (modalKind === 'mega') { const k = megaStateKey(game); if (k !== megaKey) { megaKey = k; renderModal(); } } $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
   if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }

@@ -74,21 +74,6 @@ assert.equal(g15.streak, 1); assert.equal(g15.gcs.length, 3, 'Bonus: 3 goldene K
 const sv = JSON.parse(JSON.stringify(g15.serialize())); const g16 = new Game(); g16.load(sv); assert.equal(g16.daily.claimed.length, 3); assert.equal(g16.streak, 1);
 assert.ok(g16.unlockedSkins().includes('classic')); assert.equal(g16.setSkin('gold'), false); g16.golden = 12; assert.ok(g16.setSkin('fortune')); assert.equal(g16.skin, 'fortune');
 const g17 = new Game(); g17.click(); g17.buyBuilding(0, 1); assert.equal(g17.daily.prog.clicks, 1);
-// Item-Shop (beliebig oft kaufbar)
-const g18 = new Game(); g18.owned[1] = 10; g18.recalc(); const base18 = N(g18.baseCps); g18.cookies = B(1e16);
-assert.equal(g18.buyItem('choco'), 1); assert.ok(Math.abs(N(g18.baseCps) / base18 - 1.15) < 1e-9, '+15 %');
-const cost2 = 1e14 * 1.12; const before = N(g18.cookies); assert.equal(g18.buyItem('choco'), 1); assert.ok(Math.abs(before - N(g18.cookies) - cost2) / cost2 < 1e-9, 'Preis steigt ×1,12');
-assert.equal(g18.itemCount('choco'), 2); assert.ok(Math.abs(N(g18.baseCps) / base18 - 1.30) < 1e-9, '2× = +30 %');
-assert.equal(g18.buyItem('icetea'), 0, 'zu teuer'); g18.cookies = B(1e50); assert.equal(g18.buyItem('icetea', 3), 3); assert.equal(g18.itemCount('icetea'), 3);
-assert.ok(Math.abs(N(g18.baseCps) / base18 - (1 + 0.30 + 30)) < 1e-9, '3× Eistee = +3000 %');
-const mx = new Game(); mx.cookies = B(1e18); const nmax = mx.buyItem('choco', 'max'); assert.ok(nmax > 20 && N(mx.cookies) >= 0 && mx.buyItem('choco', 1) <= 1);
-const clk = new Game(); const c0 = N(clk.clickValue); clk.cookies = B(1e15); clk.buyItem('choco'); assert.ok(Math.abs(N(clk.clickValue) / c0 - 1.15) < 1e-9, 'Klick +15 %');
-g18.total = B(8e12); g18.cookies = B(0); g18.ascend(); assert.deepEqual(g18.items, { choco: 2, icetea: 3 }, 'Items bleiben beim Aufstieg');
-const g19 = new Game(); g19.load(JSON.parse(JSON.stringify(g18.serialize()))); assert.deepEqual(g19.items, { choco: 2, icetea: 3 }); assert.ok(g19.unlockedSkins().includes('icetea'));
-const old = new Game(); old.load({ v: 2, items: ['choco', 'milk', 'nope'] }); assert.deepEqual(old.items, { choco: 1, milk: 1 }, 'alte Spielstände');
-g19.hardReset(); assert.deepEqual(g19.items, {});
-// Preise ×1e9
-const pc = new Game(); pc.cookies = B(99999999999999); assert.equal(pc.buyItem('choco'), 0, 'Schoko-Keks kostet jetzt 1e14'); pc.cookies = B(1e14); assert.equal(pc.buyItem('choco'), 1);
 // Sound-Shop
 const sg = new Game(); assert.deepEqual(sg.sounds, { owned: ['classic', 'calm'], pack: 'classic', track: 'calm' });
 assert.equal(sg.buySound('retro'), false, 'zu teuer'); sg.cookies = B(5e7); assert.ok(sg.buySound('retro')); assert.equal(sg.buySound('retro'), false, 'nur einmal'); assert.equal(N(sg.cookies), 4e7);
@@ -140,7 +125,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const m = new Game(); m.owned[0] = 20; m.recalc(); m.cookies = B('1e900'); m.total = B('1e900');
   const got = m.buySeries(0, 'max'); assert.ok(got > 1e5 && m.cookies.gte(0), 'Mega-Stufen: ' + got);
   assert.ok(Number.isFinite(m.baseCps.log10()));
-  const i2 = new Game(); i2.cookies = B('1e900'); assert.ok(i2.buyItem('icetea', 'max') > 100, 'Items');
+  const i2 = new Game(); i2.cookies = B('1e900'); 
   i2.cookies = B('1e900'); i2.applyEvent({ type: 'cookies', amount: '-5e899' }); assert.ok(i2.cookies.e === 899 || i2.cookies.e === 900);
   i2.applyEvent({ type: 'cookies', amount: '4e99999999999' }); assert.ok(i2.cookies.e === 99999999999);
   const w = new Game(); w.cookies = B('1e5000'); w.total = B('1e5000'); w.owned[3] = 10; w.recalc(); assert.ok(w.buyBuilding(3, 1) && w.cookies.e === 5000, 'Rechnen mit 1e5000');
@@ -162,7 +147,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 
 // ---- Singularität: endlose Stufen ----
 {
-  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(100000); g.items = { icetea: 1e9 }; g.recalc();
+  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(100000000000000); g.recalc();
   assert.ok(g.singAvailable && g.baseCps.log10() > 100);
   const l0 = g.baseCps.log10(); g.cookies = B('1e5'); assert.equal(g.buySing(), false, 'zu teuer');
   g.cookies = g.singCost.mulN(2); assert.ok(g.buySing() && g.sing === 1);

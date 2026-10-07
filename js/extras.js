@@ -1,5 +1,5 @@
 // Keks-Skins und tägliche Aufgaben (reine Daten/Logik, ohne DOM).
-import { Big, geoCost, geoMax, fmtBig } from './big.js';
+import { Big, fmtBig } from './big.js';
 
 // need(s): s = { ach, golden, totalAll, ascensions, upgrades, buildings, clicks, chips }
 export const SKINS = [
@@ -16,7 +16,6 @@ export const SKINS = [
   { id: 'alien', name: 'Außerirdischer', emoji: '👽', req: '100.000 Upgrades', need: (s) => s.upgrades >= 100000 },
   { id: 'rainbow', name: 'Regenbogenkeks', emoji: '🍪', cls: 'rainbow', req: '150 Erfolge', need: (s) => s.ach >= 150 },
   { id: 'gold', name: 'Goldkeks', emoji: '🌟', req: '1e30 Kekse gebacken', need: (s) => s.totalAll >= 1e30 },
-  { id: 'icetea', name: 'Eistee', emoji: '🥤', req: 'Eistee-Flasche im Shop kaufen', need: (s) => ((s.items || {}).icetea || 0) > 0 },
 ];
 export const skinById = (id) => SKINS.find((k) => k.id === id) || SKINS[0];
 
@@ -46,29 +45,6 @@ export function genTasks(date, baseCps) {
     target: type === 'clicks' ? pick(2, 8) * 100 : type === 'golden' ? pick(2, 5) : type === 'buildings' ? pick(15, 40) : type === 'upgrades' ? pick(10, 50) : Big.from(baseCps).mulN(pick(900, 3600)).max(10000).floor().toString(),
   }));
 }
-
-// ---- Item-Shop: beliebig oft kaufbar, jedes Exemplar gibt dauerhaft +x % Produktion und Klickertrag ----
-// Der Preis steigt mit jedem Exemplar (×1,12). Items bleiben beim Aufstieg erhalten.
-export const ITEM_GROWTH = 1.12;
-const PRICE_FACTOR = 1e9; // alle Item-Preise sind ×1.000.000.000
-export const ITEMS = [
-  { id: 'choco', name: 'Schoko-Keks', emoji: '🍪', pct: 15, cost: 1e5 },
-  { id: 'milk', name: 'Glas Milch', emoji: '🥛', pct: 25, cost: 5e6 },
-  { id: 'coffee', name: 'Kaffeetasse', emoji: '☕', pct: 40, cost: 2.5e8 },
-  { id: 'donut', name: 'Donut', emoji: '🍩', pct: 60, cost: 1e10 },
-  { id: 'pizza', name: 'Pizza', emoji: '🍕', pct: 100, cost: 5e11 },
-  { id: 'icecream', name: 'Eisbecher', emoji: '🍨', pct: 150, cost: 2e13 },
-  { id: 'burger', name: 'Burger', emoji: '🍔', pct: 250, cost: 1e15 },
-  { id: 'bubble', name: 'Bubble Tea', emoji: '🧋', pct: 400, cost: 5e17 },
-  { id: 'energy', name: 'Energy-Drink', emoji: '⚡', pct: 600, cost: 1e20 },
-  { id: 'cake', name: 'Goldene Torte', emoji: '🎂', pct: 800, cost: 1e23 },
-  { id: 'icetea', name: 'Eistee-Flasche', emoji: '🥤', pct: 1000, cost: 1e27, best: true },
-].map((it) => ({ ...it, cost: it.cost * PRICE_FACTOR }));
-export const itemById = (id) => ITEMS.find((i) => i.id === id);
-// owned = { id: Anzahl }
-export const itemMultiplier = (owned) => 1 + ITEMS.reduce((a, it) => a + it.pct * (owned[it.id] || 0), 0) / 100;
-export const itemCost = (it, have, n = 1) => geoCost(it.cost, ITEM_GROWTH, have, n);
-export const itemMaxAffordable = (it, have, cookies) => geoMax(it.cost, ITEM_GROWTH, have, cookies);
 
 // ---- Sound-Shop: Klang-Pakete und Musikstücke, einmalig für Kekse kaufen ----
 export const SOUND_PACKS = [
