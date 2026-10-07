@@ -186,7 +186,7 @@ document.addEventListener('mouseover', (e) => {
   const up = e.target.closest('.up'); const row = e.target.closest('#shop .row');
   if (up) { const u = upgrade(+up.dataset.id); showTip(`<b>${esc(u.name)}</b><br>${esc(u.desc)}<br><span class="mu">${u.kind === 'heaven' ? '😇 ' + fmt(u.cost) + ' Chips' : '🍪 ' + fmt(u.cost)}</span>`, e); }
   else if (row) {
-    const i = +row.dataset.i, b = BUILDINGS[i], per = Big.from(b.cps).mulLog(game.tierLog[i] + game.globalLog).mulN(1 + 0.01 * game.chipsEarned);
+    const i = +row.dataset.i, b = BUILDINGS[i], per = Big.from(b.cps).mulLog(game.tierLog[i] + game.globalLog).mul(Big.from(1).add(game.chipsEarned.mulN(0.01)));
     showTip(`<b>${b.name}</b> (${game.owned[i]})<br>Jedes erzeugt ca. ${fmt(per)} Kekse/s<br>Gesamt: ${fmt(per.mulN(game.owned[i]))}/s<br><span class="mu">Rechtsklick: verkaufen (50 %)</span>`, e);
   }
 });
@@ -201,7 +201,7 @@ const NEWS = [
   () => (game.owned[2] > 5 ? 'Farmen melden Rekordernte an Keksbäumen.' : 'Keksteig ist die neue Währung.'),
   () => (game.owned[6] > 1 ? 'Tempel-Priester: „Der Keks ist unser Licht“.' : 'Gerücht: Ein goldener Keks soll gesichtet worden sein.'),
   () => (game.owned[10] > 0 ? 'Portal zur Keks-Dimension gesichtet – es riecht nach Vanille.' : 'Wissenschaftler zählen Krümel. Ergebnis: viele.'),
-  () => (game.chipsEarned > 0 ? 'Engel loben dein Backwerk: „Himmlisch!“' : 'Tipp: Ab 1 Billion Keksen lohnt sich der Aufstieg.'),
+  () => (!game.chipsEarned.isZero() ? 'Engel loben dein Backwerk: „Himmlisch!“' : 'Tipp: Ab 1 Billion Keksen lohnt sich der Aufstieg.'),
 ];
 function newsTick() { $('#ticker').textContent = NEWS[Math.floor(Math.random() * NEWS.length)](); }
 newsTick(); setInterval(newsTick, 9000);
@@ -260,7 +260,7 @@ function renderModal() {
     body.innerHTML = `<div class="stack"><p>Beim Aufstieg setzt du Kekse, Gebäude und normale Upgrades zurück und erhältst <b>Himmelschips</b>. Jeder Chip gibt dauerhaft <b>+1 % Produktion</b> und schaltet himmlische Upgrades frei (die bleiben für immer).</p>
       <div class="kv"><span>Chips gesamt</span><span>${fmt(game.chipsEarned)}</span><span>Chips verfügbar</span><span>${fmt(game.chipsAvailable)}</span><span>Chips beim Aufstieg</span><span><b>+${fmt(g)}</b></span></div>
       <p class="note">Chips = ³√(Gesamt-Kekse / 1 Billion). Himmlische Upgrades findest du im Upgrade-Filter „Himmlisch“.</p>
-      <button id="doAscend" ${g < 1 ? 'disabled' : ''}>🪽 Jetzt aufsteigen</button></div>`;
+      <button id="doAscend" ${g.lt(1) ? 'disabled' : ''}>🪽 Jetzt aufsteigen</button></div>`;
     $('#doAscend')?.addEventListener('click', () => { if (confirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
