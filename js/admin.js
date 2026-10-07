@@ -7,13 +7,13 @@ import { Big, ZERO } from './big.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SUFFIX = { k: 1e3, m: 1e6, mio: 1e6, b: 1e9, mrd: 1e9, t: 1e12, bio: 1e12, brd: 1e15, qa: 1e15, trl: 1e18, qi: 1e18, trd: 1e21, sx: 1e21, sp: 1e24, oc: 1e27, no: 1e30, dc: 1e33 };
 // "1,5 mio" / "2e9" / "10k" -> Zahl
-// wie parseNum, aber als Big (bis 9,99e99999999999, z. B. "5e500"); ungültig = 0
+// wie parseNum, aber als Big (ohne Obergrenze, z. B. "5e500"); ungültig = 0
 export function parseBig(txt) {
   const m = /^\s*([\d.,]+)(?:e([+-]?\d+))?\s*([a-z]*)\s*$/i.exec(String(txt));
   if (!m) return ZERO;
   const base = Number(m[1].replace(',', '.')); const mult = m[3] ? SUFFIX[m[3].toLowerCase()] : 1;
   if (!(base > 0) || !mult) return ZERO;
-  const ex = m[2] ? Number(m[2]) : 0; if (ex > 99999999999) return ZERO;
+  const ex = m[2] ? Number(m[2]) : 0; if (ex > 1e300) return ZERO;
   return Big.norm(base * mult, ex).clamp();
 }
 export function parseNum(txt) {
