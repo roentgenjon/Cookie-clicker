@@ -57,7 +57,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   const val = (s) => $(s).value;
   const ALL = 'ALL';
   const nameOf = (id) => (id === ALL ? 'Alle Spieler' : (players.find((p) => p.id === id) || {}).name || id);
-  const say = (text, ok = true) => { note = { text, ok }; };
+  const say = (text, ok = true) => { note = { text: text === 'Unbekannte Aktion' ? 'Der Server kennt diese Funktion noch nicht – der Cloudflare-Worker muss neu veröffentlicht werden (Update steht aus).' : text, ok }; };
 
   async function call(action, extra) {
     try { return await cloud.admin(action, extra); } catch (e) { say(e.message, false); paint(); throw e; }
