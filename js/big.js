@@ -84,7 +84,7 @@ export function geoMax(base, g, have, cookies, limit = Infinity) {
   const v = r > 15 ? r : Math.log10(1 + Math.pow(10, r));
   let n = Math.min(limit, Math.floor(v / Math.log10(g)));
   if (!(n >= 1)) return 0;
-  while (n > 0 && geoCost(base, g, have, n).gt(cookies)) n--;
+  if (n < 9e15) while (n > 0 && geoCost(base, g, have, n).gt(cookies)) n--; // darüber ändert n-- nichts mehr (Doubles sind nicht ganzzahlig genau)
   return n;
 }
 

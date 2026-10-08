@@ -6,7 +6,7 @@ import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
 import { renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
-import { TOTAL_ALL_TEXT } from './mega.js';
+import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
 import { skinById } from './extras.js';
 let megaKey = '';
 
@@ -162,7 +162,7 @@ function renderUpgrades() {
     ids = a.ids.concat(h.ids); total = a.total + h.total;
   } else ({ ids, total } = game.visibleList(false, K[filter.toUpperCase()], shown));
   const key = ids.map((id) => id + (game.canAfford(id) ? '+' : '-')).join() + '|' + total;
-  $('#upCount').textContent = `${(BigInt(game.upgradeCount) + BigInt(Math.floor(game.seriesTotal))).toLocaleString('de-DE')} / ${TOTAL_ALL_TEXT} gekauft · ${total.toLocaleString('de-DE')} verfügbar`;
+  $('#upCount').textContent = `${fmtUp(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT} gekauft · ${total.toLocaleString('de-DE')} verfügbar`;
   if (key === lastKey) return; lastKey = key;
   $('#upgrades').innerHTML = ids.map((id) => { const u = upgrade(id); return `<button class="up ${u.kind === 'heaven' ? 'heaven ' : ''}${game.canAfford(id) ? 'ok' : 'no'}" data-id="${id}">${u.icon}</button>`; }).join('');
   const more = total - ids.length;
@@ -239,7 +239,7 @@ function renderModal() {
       <span>Klicks</span><span>${fmt(game.clicks)}</span>
       <span>Goldene Kekse geklickt</span><span>${fmt(game.golden)}</span>
       <span>Gebäude</span><span>${fmt(game.owned.reduce((a, b) => a + b, 0))}</span>
-      <span>Upgrades</span><span>${(BigInt(game.upgradeCount) + BigInt(Math.floor(game.seriesTotal))).toLocaleString('de-DE')} / ${TOTAL_ALL_TEXT}</span>
+      <span>Upgrades</span><span>${fmtUp(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</span>
       <span>Erfolge</span><span>${game.achCount()} / ${ACH.length}</span>
       <span>Aufstiege</span><span>${game.ascensions}</span>
       <span>Singularität</span><span>${game.sing ? `Stufe ${game.sing.toLocaleString('de-DE')} (Produktion hoch ${game.singPower.toFixed(3).replace('.', ',')})` : 'noch nicht gekauft'}</span>

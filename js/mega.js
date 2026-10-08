@@ -1,14 +1,17 @@
-// Mega-Upgrades: 100 unendlich-artige Reihen. Jede Reihe hat ~100 Billionen Stufen (einzeln nacheinander kaufbar).
-// Zusammen mit den 400.000 normalen Upgrades ergibt das genau 10^16 = 10.000.000.000.000.000 Upgrades.
+// Mega-Upgrades: 100 unendlich-artige Reihen. Jede Reihe hat ~10^23 Stufen (einzeln nacheinander kaufbar).
+// Zusammen mit den 400.000 normalen Upgrades ergibt das genau 10^25 = 10.000.000.000.000.000.000.000.000 Upgrades.
 // Die Stufen werden nicht gespeichert, sondern nur der Fortschritt je Reihe (100 Zahlen) – alles andere ist Mathematik.
 import { BUILDINGS, TOTAL_UPGRADES } from './data.js';
-import { Big, geoCost, geoMax } from './big.js';
+import { Big, geoCost, geoMax, fmtBig } from './big.js';
 
 export const SERIES_COUNT = 100;
-export const TOTAL_TARGET = 10n ** 16n; // gewünschte Gesamtzahl
-export const SERIES_LEVELS = Number((TOTAL_TARGET - BigInt(TOTAL_UPGRADES)) / BigInt(SERIES_COUNT)); // 99.999.999.999.996 Stufen je Reihe
-export const TOTAL_ALL = BigInt(TOTAL_UPGRADES) + BigInt(SERIES_LEVELS) * BigInt(SERIES_COUNT);
-export const TOTAL_ALL_TEXT = TOTAL_ALL.toLocaleString('de-DE');
+export const TOTAL_TARGET = 10n ** 25n; // gewünschte Gesamtzahl (1.000.000.000 × so viele wie früher: 10^16)
+const LEVELS_BIG = (TOTAL_TARGET - BigInt(TOTAL_UPGRADES)) / BigInt(SERIES_COUNT); // 10^23 − 4.000 Stufen je Reihe (exakt als BigInt)
+export const SERIES_LEVELS = Number(LEVELS_BIG); // für die Rechnung als Zahl (über 2^53 nur noch auf ~16 Stellen genau)
+export const TOTAL_ALL = BigInt(TOTAL_UPGRADES) + LEVELS_BIG * BigInt(SERIES_COUNT); // exakt 10^25
+export const TOTAL_ALL_TEXT = fmtBig(Number(TOTAL_ALL)); // „10 Qa“
+// Anzahl von Upgrades/Stufen anzeigen: bis 1e15 ausgeschrieben, darüber gekürzt (große Zahlen sind als Double nicht mehr ganzzahlig genau)
+export const fmtUp = (n) => (n < 1e15 ? Math.floor(n).toLocaleString('de-DE') : fmtBig(n));
 
 const TIERS = [
   { name: 'Bronze', icon: '🥉', need: 10, mult: 1, g: 1.02, e: 0.0008 },
