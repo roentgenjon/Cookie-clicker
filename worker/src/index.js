@@ -88,7 +88,7 @@ function cleanEvent(e) {
       const amount = num(e.amount, -1e300, 1e300); return amount === null ? null : { type: 'cookies', amount };
     }
     case 'chips': { const amount = num(e.amount, 1, 1e9); return amount ? { type: 'chips', amount: Math.floor(amount) } : null; }
-    case 'building': { const b = num(e.b, 0, 14), amount = num(e.amount, 1, 100000); return b !== null && amount ? { type: 'building', b: Math.floor(b), amount: Math.floor(amount) } : null; }
+    case 'building': { const b = num(e.b, 0, 114), amount = num(e.amount, 1, 100000); return b !== null && amount ? { type: 'building', b: Math.floor(b), amount: Math.floor(amount) } : null; }
     case 'buff': { const mult = num(e.mult, 1, 1e6), seconds = num(e.seconds, 1, 3600); return ['frenzy', 'click'].includes(e.kind) && mult && seconds ? { type: 'buff', kind: e.kind, mult, seconds } : null; }
     case 'achievements': return { type: 'achievements' };
     case 'upgrades': return ['all', 'cookie', 'heaven', 'none'].includes(e.mode) ? { type: 'upgrades', mode: e.mode } : null;
