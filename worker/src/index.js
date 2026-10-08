@@ -149,7 +149,7 @@ function describeEvent(e) {
     case 'buff': return `${e.kind === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${e.mult} für ${e.seconds} s`;
     case 'achievements': return 'alle Erfolge freigeschaltet';
     case 'upgrades': return { all: 'alle Upgrades freigeschaltet', cookie: 'alle Cookie-Upgrades freigeschaltet', heaven: 'alle himmlischen Upgrades freigeschaltet', none: 'alle Upgrades entfernt' }[e.mode] || 'Upgrades geändert';
-    case 'message': return `Nachricht „${String(e.text).slice(0, 80)}“`;
+    case 'message': { const m = /^🎁bld:(\d{1,3}):(\d{1,6})$/.exec(String(e.text || '')); return m ? `${m[2]}× Gebäude Nr. ${Number(m[1]) + 1} gegeben` : `Nachricht „${String(e.text).slice(0, 80)}“`; }
     case 'reset': return 'Spielstand zurückgesetzt';
     default: return String(e.type || '');
   }
