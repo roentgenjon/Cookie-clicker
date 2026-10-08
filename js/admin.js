@@ -1,6 +1,6 @@
 // Admin-Panel: Spielerliste, Spieler auswählen, Ereignisse schicken (Sterne spawnen, Raserei, Kekse, ...).
 // Die Rechte werden vom Server geprüft (nur die Admin-Konten); diese Oberfläche ist nur die Bedienung.
-import { BUILDINGS } from './data.js';
+import { BUILDINGS, BASE_COUNT } from './data.js';
 import { cloud } from './cloud.js';
 
 import { Big, ZERO } from './big.js';
@@ -118,7 +118,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'give': return `
         <div class="adm-sec"><h4>🍪 Kekse</h4><div class="adm-grid">${fld('Menge', '<input type="text" id="cAmt" value="1 mio" placeholder="z. B. 1 mio, 5e9, 10k">', 'k, mio, mrd, bio, 5e9 …')}<div class="adm-btns"><button data-act="cGive">➕ Geben</button><button data-act="cTake">➖ Abziehen</button></div></div></div>
         <div class="adm-sec"><h4>😇 Himmelschips</h4><div class="adm-grid">${fld('Anzahl', '<input type="number" id="chAmt" min="1" value="10">')}<div class="adm-btns"><button data-act="chips">Chips geben</button></div></div></div>
-        <div class="adm-sec"><h4>🏭 Gebäude</h4><div class="adm-grid3">${fld('Gebäude', `<select id="bSel">${BUILDINGS.map((b, i) => `<option value="${i}">${b.icon} ${esc(b.name)}</option>`).join('')}</select>`)}${fld('Anzahl', '<input type="number" id="bAmt" min="1" max="100000" value="10">', 'bis 100.000')}<div class="adm-btns"><button data-act="building">Geben</button></div></div></div>`;
+        <div class="adm-sec"><h4>🏭 Gebäude</h4><div class="adm-grid3">${fld('Gebäude', `<select id="bSel">${BUILDINGS.slice(0, BASE_COUNT).map((b, i) => `<option value="${i}">${b.icon} ${esc(b.name)}</option>`).join('')}</select>`)}${fld('Anzahl', '<input type="number" id="bAmt" min="1" max="100000" value="10">', 'bis 100.000')}<div class="adm-btns"><button data-act="building">Geben</button></div></div></div>`;
       case 'up': return `
         <div class="adm-hint">Schaltet Upgrades und Erfolge frei oder entfernt sie.</div>
         <div class="adm-sec"><h4>🧪 Upgrades (400.000)</h4><div class="adm-btns wrap"><button data-act="up" data-m="all">Alle freischalten</button><button data-act="up" data-m="cookie">Nur Cookie-Upgrades</button><button data-act="up" data-m="heaven">Nur himmlische</button><button class="danger" data-act="up" data-m="none">Alle entfernen</button></div></div>

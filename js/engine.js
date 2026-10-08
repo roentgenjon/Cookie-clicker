@@ -1,13 +1,23 @@
 import { SERIES, SERIES_COUNT, SERIES_LEVELS, seriesCost, seriesMaxAffordable, seriesLog } from './mega.js';
 import { Big, ZERO, geoCost, geoMax } from './big.js';
 import { SKINS, skinById, dayKey, yesterdayKey, genTasks, soundDef, soundKind } from './extras.js';
-import { BUILDINGS, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
+import { BUILDINGS, BASE_COUNT, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
 // Kekse, Produktion und Preise sind Big-Zahlen (ohne Obergrenze). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
 const LG = { tierBig: Math.log10(EFFECT.tierBig), tierSmall: Math.log10(EFFECT.tierSmall), click: Math.log10(EFFECT.click), global: Math.log10(EFFECT.global), hGlobal: Math.log10(EFFECT.hGlobal), hClick: Math.log10(EFFECT.hClick) };
 // Singularität: endlose Stufen. Jede Stufe hebt die gesamte Produktion in die Potenz 1,02 (Exponent ×1,02) und kostet
 // 60 Sekunden Produktion × 1,03^Stufe – der Preis wächst mit der Produktion mit, dadurch gibt es immer eine nächste Stufe.
+// Boni, die man mit der Singularität freischaltet: [Stufe, Text]
+export const SING_MILESTONES = [
+  [10, 'Goldene Kekse erscheinen 25 % schneller'],
+  [25, 'Singularität-Preis −10 %'],
+  [50, 'Goldene Kekse bleiben 50 % länger'],
+  [100, 'Offline-Ertrag: 24 Std länger'],
+  [250, 'Goldene Belohnungen ×2'],
+  [500, 'Singularität-Preis −25 % (zusätzlich)'],
+  [1000, 'Raserei-Stärke ×2'],
+];
 export const SING_POW = 1.02; export const SING_COST = 1.03; export const SING_SECS = 60; export const SING_MIN_LOG = 100; // ab Produktion 1e100 verfügbar
 const OFFLINE_CAP = 24 * 3600; // Basis-Limit; himmlische Upgrades erhöhen es
 
@@ -119,8 +129,8 @@ export class Game {
   // „Alle kaufen“ für Mega-Reihen: das Guthaben wird gleichmäßig auf alle freigeschalteten Reihen verteilt (4 Runden, Reste fließen weiter)
   buyAllSeries() {
     let total = 0;
-    for (let round = 0; round < 4; round++) {
-      const vis = []; for (let i = 0; i < SERIES_COUNT; i++) if (this.seriesVisible(i)) vis.push(i);
+    for (let round = 0; round < 6; round++) {
+      const vis = []; for (let i = 0; i < SERIES_COUNT; i++) if (this.seriesVisible(i) && this.seriesPrice(i, 1).lte(this.cookies)) vis.push(i); // nur Reihen, von denen man mindestens 1 Stufe bezahlen kann
       if (!vis.length || this.cookies.isZero()) break;
       vis.sort((a, b) => this.seriesPrice(a, 1).cmp(this.seriesPrice(b, 1)));
       const share = this.cookies.divN(vis.length); let any = false;
@@ -136,7 +146,17 @@ export class Game {
     this.resetAgg();
     for (let id = 0; id < TOTAL_UPGRADES; id++) if (this.bought[id]) this.applyOne(id);
     for (let i = 0; i < SERIES_COUNT; i++) if (this.series[i] > 0) this.applySeriesFactor(i, this.series[i]);
+    this.applySingBonuses();
     this.updateCps();
+  }
+  // Meilenstein-Boni der Singularität (gelten zusätzlich zu den Upgrades)
+  applySingBonuses() {
+    const l = this.sing;
+    if (l >= 10) this.gFreq = Math.max(0.2, this.gFreq * 0.8);
+    if (l >= 50) this.gDur *= 1.5;
+    if (l >= 100) this.offlineCap += 24 * 3600;
+    if (l >= 250) this.gReward *= 2;
+    if (l >= 1000) this.gFrenzy *= 2;
   }
 
   achCount() { let c = 0; for (const v of this.ach) c += v; return c; }
@@ -155,12 +175,13 @@ export class Game {
   }
   // ---- Singularität ----
   get singAvailable() { return !this.baseCps.isZero() && this.baseCps.log10() >= SING_MIN_LOG; }
-  get singCost() { return this.baseCps.mulN(SING_SECS * Math.pow(SING_COST, this.sing)); }
+  get singDiscount() { return (this.sing >= 25 ? 0.9 : 1) * (this.sing >= 500 ? 0.75 : 1); }
+  get singCost() { return this.baseCps.mulN(SING_SECS * Math.pow(SING_COST, this.sing) * this.singDiscount); }
   get singPower() { return Math.pow(SING_POW, this.sing); }
   buySing() {
     if (!this.singAvailable) return false;
     const cost = this.singCost; if (cost.gt(this.cookies)) return false;
-    this.cookies = this.cookies.sub(cost); this.sing++; this.updateCps();
+    this.cookies = this.cookies.sub(cost); this.sing++; this.recalc();
     return true;
   }
   // ---- Sound-Shop ----
@@ -375,7 +396,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
+    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();

@@ -84,7 +84,7 @@ const sg2 = new Game(); sg2.load(JSON.parse(JSON.stringify(sg.serialize()))); as
 const sg3 = new Game(); sg3.load({ v: 2, sounds: { owned: ['zen', 'unsinn'], pack: 'epic', track: 'calm' } }); assert.equal(sg3.sounds.pack, 'classic', 'nicht besessen -> klassisch'); assert.ok(sg3.sounds.owned.includes('zen') && !sg3.sounds.owned.includes('unsinn'));
 // Mega-Upgrades
 import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
-  assert.equal(TOTAL_ALL, 10n ** 25n); assert.equal(SERIES.length, 100);
+  assert.equal(TOTAL_ALL, 10n ** 25n); assert.equal(SERIES.length, 200);
   const mg = new Game(); mg.owned[0] = 20; mg.recalc(); const b0 = N(mg.baseCps);
   assert.equal(mg.seriesVisible(0), true); assert.equal(mg.seriesVisible(6), false, 'Silber braucht 50');
   assert.equal(mg.buySeries(0), 0, 'kein Geld'); mg.cookies = B(1e6);
@@ -164,11 +164,39 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 // ---- 10^25 Upgrades: Mega-Stufen bis 10^23 je Reihe ----
 {
   const { SERIES_LEVELS, TOTAL_ALL, TOTAL_ALL_TEXT, fmtUp } = await import('../js/mega.js');
-  assert.equal(TOTAL_ALL, 10n ** 25n); assert.ok(SERIES_LEVELS > 9.9e22 && SERIES_LEVELS < 1.01e23); assert.equal(TOTAL_ALL_TEXT, '10 Qa'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
+  assert.equal(TOTAL_ALL, 10n ** 25n); assert.ok(SERIES_LEVELS > 4.99e22 && SERIES_LEVELS < 5.01e22); assert.equal(TOTAL_ALL_TEXT, '10 Qa'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
   const g = new Game(); g.owned[0] = 20; g.recalc(); g.cookies = B('1e' + '9'.repeat(25)); g.total = g.cookies; // Exponent ~1e25: genug für alle Stufen
   const t0 = Date.now(); const got = g.buySeries(0, 'max'); assert.ok(Date.now() - t0 < 2000, 'keine Endlosschleife');
-  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 3e19, 'Produktion wächst mit 10^23 Stufen');
+  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e19, 'Produktion wächst mit 5·10^22 Stufen');
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.series[0], SERIES_LEVELS, 'Speichern/Laden');
   const b = new Game(); b.owned.fill(100); b.recalc(); b.cookies = B('1e' + '9'.repeat(25)); b.total = b.cookies; assert.ok(b.buyAllSeries() > 1e22, '„Alle kaufen“ mit riesigen Stufen');
   console.log('10^25-Upgrades-Test OK');
+}
+
+// ---- 100 neue Gebäude ----
+{
+  const { BUILDINGS, BASE_COUNT } = await import('../js/data.js'); const { SERIES, SERIES_COUNT } = await import('../js/mega.js');
+  assert.equal(BUILDINGS.length, 115); assert.equal(BASE_COUNT, 15); assert.equal(new Set(BUILDINGS.map((b) => b.name)).size, 115, 'Namen eindeutig');
+  for (let i = 1; i < BUILDINGS.length; i++) assert.ok(BUILDINGS[i].base > BUILDINGS[i - 1].base && BUILDINGS[i].cps > BUILDINGS[i - 1].cps, 'Preis und Produktion steigen: ' + i);
+  assert.equal(SERIES.length, SERIES_COUNT); assert.equal(SERIES[100].kind, 'bld'); assert.equal(SERIES[100].b, 15); assert.equal(SERIES[SERIES_COUNT - 1].b, 114);
+  const g = new Game(); g.cookies = B(BUILDINGS[15].base * 20); g.total = g.cookies;
+  assert.equal(g.buyBuilding(15, 5), true); assert.equal(g.owned[15], 5); assert.ok(N(g.baseCps) >= BUILDINGS[15].cps * 5 * 0.999, 'neues Gebäude produziert');
+  assert.equal(g.seriesVisible(100), false, 'Reihe braucht 10 Gebäude'); g.owned[15] = 10; assert.equal(g.seriesVisible(100), true);
+  g.owned[114] = 1; g.recalc(); assert.ok(g.baseCps.log10() > 90, 'Gebäude 115 liefert riesige Produktion');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.owned[114], 1); assert.equal(sv.owned[15], 10);
+  const old = new Game(); old.load({ v: 2, owned: [3, 2, 1], cookies: 100 }); assert.equal(old.owned.length, 115); assert.equal(old.owned[2], 1); assert.equal(old.owned[20], 0, 'alte Spielstände');
+  const ach = new Game(); ach.owned[15] = 2; ach.owned[16] = 1; const fresh = ach.checkAchievements().map((a) => a.name); assert.ok(fresh.includes('Entdecker 1') && fresh.includes('Baumeister 1'), 'neue Erfolge: ' + fresh.join());
+  console.log('Gebäude-Test OK');
+}
+// ---- Singularität: Meilenstein-Boni ----
+{
+  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(100000000000000); g.recalc(); const f0 = g.gFreq, d0 = g.gDur, r0 = g.gReward, fr0 = g.gFrenzy, c0 = g.singCost.log10();
+  g.sing = 10; g.recalc(); assert.ok(Math.abs(g.gFreq - Math.max(0.2, f0 * 0.8)) < 1e-9, 'Stufe 10: goldene Kekse schneller');
+  g.sing = 25; g.recalc(); const c25 = g.singCost.log10(); assert.ok(g.singDiscount === 0.9);
+  g.sing = 50; g.recalc(); assert.ok(Math.abs(g.gDur - d0 * 1.5) < 1e-9, 'Stufe 50: länger');
+  g.sing = 100; g.recalc(); assert.ok(g.offlineCap >= 2 * 24 * 3600, 'Stufe 100: Offline +24 Std');
+  g.sing = 250; g.recalc(); assert.ok(Math.abs(g.gReward - r0 * 2) < 1e-9, 'Stufe 250: Belohnung ×2');
+  g.sing = 500; g.recalc(); assert.ok(Math.abs(g.singDiscount - 0.675) < 1e-9, 'Stufe 500: Preis −25 % zusätzlich');
+  g.sing = 1000; g.recalc(); assert.ok(Math.abs(g.gFrenzy - fr0 * 2) < 1e-9, 'Stufe 1000: Raserei ×2');
+  console.log('Meilenstein-Test OK');
 }

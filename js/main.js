@@ -1,4 +1,4 @@
-import { BUILDINGS, upgrade, TOTAL_UPGRADES, KIND, K } from './data.js';
+import { BUILDINGS, BASE_COUNT, upgrade, TOTAL_UPGRADES, KIND, K } from './data.js';
 import { Big, fmtBig } from './big.js';
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
@@ -130,7 +130,10 @@ $('#amount').addEventListener('click', (e) => {
   [...$('#amount').children].forEach((c) => c.classList.toggle('on', c === b));
 });
 function renderShop() {
+  // Die 100 neuen Gebäude erscheinen nach und nach: die nächsten 3 nach dem höchsten, das du besitzt
+  let hi = BASE_COUNT - 1; game.owned.forEach((n, i) => { if (n > 0 && i > hi) hi = i; });
   shopRows.forEach((row, i) => {
+    if (i > hi + 3) { row.className = 'row cant hidden'; return; }
     const n = amount === 'max' ? Math.max(1, game.maxAffordable(i)) : amount;
     const cost = game.buildingCost(i, n);
     const can = cost.lte(game.cookies);

@@ -1,6 +1,7 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
 import { SKINS, TASK_INFO, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
+import { SING_MILESTONES } from './engine.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, fmtUp, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseBig } from './admin.js';
 import { Big } from './big.js';
@@ -91,7 +92,7 @@ function singCard(game, fmt) {
   const l = game.sing;
   if (!game.singAvailable && !l) return `<div class="item"><div class="ie">🕳️</div><div class="in"><b>Singularität</b><div class="ip">Endlose Stufen: jede hebt deine ganze Produktion in die Potenz 1,02 – ohne Obergrenze. Freigeschaltet ab 1e100 Kekse pro Sekunde.</div></div><button disabled>🔒 gesperrt</button></div>`;
   const cost = game.singCost; const can = game.cookies.gte(cost);
-  return `<div class="item has"><div class="ie">🕳️</div><div class="in"><b>Singularität · Stufe ${fmtUp(l)}</b><div class="ip">Jede Stufe: Produktion hoch 1,02. Preis: ${(60 * Math.pow(1.03, l)).toLocaleString('de-DE', { maximumFractionDigits: 0 })} s Produktion – wächst mit, es gibt immer eine nächste Stufe.</div><div class="have">${l ? `Aktuell: Exponent × ${game.singPower.toFixed(3).replace('.', ',')}` : 'Noch nicht gekauft'}</div></div><button data-sing ${can ? '' : 'disabled'}>🍪 ${fmt(cost)}</button></div>`;
+  return `<div class="item has"><div class="ie">🕳️</div><div class="in"><b>Singularität · Stufe ${fmtUp(l)}</b><div class="ip">Jede Stufe: Produktion hoch 1,02. Preis: ${(60 * Math.pow(1.03, l) * game.singDiscount).toLocaleString('de-DE', { maximumFractionDigits: 0 })} s Produktion – wächst mit, es gibt immer eine nächste Stufe.</div><div class="have">${l ? `Aktuell: Exponent × ${game.singPower.toFixed(3).replace('.', ',')}` : 'Noch nicht gekauft'}</div><div class="have">🎁 Boni ${SING_MILESTONES.filter(([n]) => l >= n).length}/${SING_MILESTONES.length}${SING_MILESTONES.find(([n]) => l < n) ? ` · nächster bei Stufe ${SING_MILESTONES.find(([n]) => l < n)[0]}: ${SING_MILESTONES.find(([n]) => l < n)[1]}` : ' · alle freigeschaltet'}</div></div><button data-sing ${can ? '' : 'disabled'}>🍪 ${fmt(cost)}</button></div>`;
 }
 export function renderMega(body, { game, fmt, toast, title, changed, buySound }) {
   title('♾️ Mega-Upgrades');
@@ -101,7 +102,7 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
   body.innerHTML = `<div class="stack">
     <div class="shop-top"><div><b>${fmtUp(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</b><div class="note">Upgrades gekauft (normale + Mega-Stufen)</div></div>
       <div class="seg" id="mgAmt">${[1, 10, 100, 1000, 'max'].map((n) => `<button data-n="${n}" class="${n === megaAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
-    <p class="note">Jede Reihe hat knapp <b>10²³ Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
+    <p class="note">Jede Reihe hat knapp <b>5·10²² Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
     <div class="items">${singCard(game, fmt)}</div>
     <div class="items">${vis.map((i) => {
       const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = game.cookies.gte(cost);

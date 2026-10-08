@@ -13,7 +13,7 @@ Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**
 | Goldene Kekse | 34.000 |
 | Himmlische Upgrades (kosten Chips, bleiben nach Aufstieg) | 50.000 |
 
-**Mega-Upgrades:** Zusätzlich gibt es 100 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen) mit je 99.999.999.999.999.999.996.000 (~10^23) Stufen,
+**Mega-Upgrades:** Zusätzlich gibt es 200 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen, 100 Reihen für die neuen Gebäude) mit je ~5·10^22 Stufen,
 die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das genau **10.000.000.000.000.000.000.000.000 (10^25) Upgrades**.
 Gespeichert wird nur der Fortschritt je Reihe, die Stufen selbst sind Mathematik.
 
@@ -48,3 +48,6 @@ Der Worker speichert alles in **Cloudflare D1** (SQLite, kostenlos 100.000 Schre
 node tests/check.mjs && node tests/engine.mjs
 python3 -m http.server 8000   # dann http://localhost:8000
 ```
+
+- 🏗️ 115 Gebäude: die ersten 15 klassisch, dazu 100 weitere (Keksplanet … Urknall-Küche). Sie erscheinen im Shop nach und nach (die nächsten 3 nach deinem höchsten Gebäude) und haben je eine Mega-Reihe.
+- 🕳️ Singularität: endlose Stufen (Produktion hoch 1,02 je Stufe) mit 7 Meilenstein-Boni (Stufe 10, 25, 50, 100, 250, 500, 1000).
