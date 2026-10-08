@@ -82,7 +82,7 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
   }));
 }
 
-// ---- Mega-Upgrades: 100 Reihen mit je ~10^23 Stufen ----
+// ---- Mega-Upgrades: 100 Reihen mit je ~5·10^44 Stufen ----
 let megaAmt = 1; // 1 / 10 / 100 / 1000 / 'max'
 const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, seriesMaxAffordable(SERIES[i], game.series[i], game.cookies)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
 const big = (n) => BigInt(Math.floor(n)).toLocaleString('de-DE');
@@ -102,7 +102,7 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
   body.innerHTML = `<div class="stack">
     <div class="shop-top"><div><b>${fmtUp(game.upgradeCount + game.seriesTotal)} / ${TOTAL_ALL_TEXT}</b><div class="note">Upgrades gekauft (normale + Mega-Stufen)</div></div>
       <div class="seg" id="mgAmt">${[1, 10, 100, 1000, 'max'].map((n) => `<button data-n="${n}" class="${n === megaAmt ? 'on' : ''}">${n === 'max' ? 'Max' : '×' + n}</button>`).join('')}</div></div>
-    <p class="note">Jede Reihe hat knapp <b>5·10²² Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
+    <p class="note">Jede Reihe hat knapp <b>5·10⁴⁴ Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
     <div class="items">${singCard(game, fmt)}</div>
     <div class="items">${vis.map((i) => {
       const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = game.cookies.gte(cost);

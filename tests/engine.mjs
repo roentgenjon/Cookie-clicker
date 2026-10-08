@@ -84,7 +84,7 @@ const sg2 = new Game(); sg2.load(JSON.parse(JSON.stringify(sg.serialize()))); as
 const sg3 = new Game(); sg3.load({ v: 2, sounds: { owned: ['zen', 'unsinn'], pack: 'epic', track: 'calm' } }); assert.equal(sg3.sounds.pack, 'classic', 'nicht besessen -> klassisch'); assert.ok(sg3.sounds.owned.includes('zen') && !sg3.sounds.owned.includes('unsinn'));
 // Mega-Upgrades
 import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
-  assert.equal(TOTAL_ALL, 10n ** 25n); assert.equal(SERIES.length, 200);
+  assert.equal(TOTAL_ALL, 10n ** 47n); assert.equal(SERIES.length, 200);
   const mg = new Game(); mg.owned[0] = 20; mg.recalc(); const b0 = N(mg.baseCps);
   assert.equal(mg.seriesVisible(0), true); assert.equal(mg.seriesVisible(6), false, 'Silber braucht 50');
   assert.equal(mg.buySeries(0), 0, 'kein Geld'); mg.cookies = B(1e6);
@@ -94,7 +94,7 @@ import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(mg.serialize()))); assert.equal(sv.series[0], mg.series[0]); assert.ok(Math.abs(sv.baseCps.div(mg.baseCps).toNumber() - 1) < 1e-9);
   mg.total = B(8e12); mg.ascend(); assert.equal(mg.series[0], 0, 'Reihen werden beim Aufstieg zurückgesetzt');
   const huge = new Game(); huge.owned[0] = 600; huge.cookies = B(1e300); huge.recalc(); const got = huge.buySeries(5, 'max'); assert.ok(got > 1000 && Number.isFinite(huge.cps.log10()), `riesige Stufenzahl: ${got}`);
-  const bad = new Game(); bad.load({ v: 2, series: ['x', -5, 1e30, 3] }); assert.deepEqual(bad.series.slice(0, 4), [0, 0, SERIES_LEVELS, 3]);
+  const bad = new Game(); bad.load({ v: 2, series: ['x', -5, 1e60, 3] }); assert.deepEqual(bad.series.slice(0, 4), [0, 0, SERIES_LEVELS, 3]);
 });
 // „Alle kaufen“ mit Mega-Reihen
 const ba = new Game(); ba.owned.fill(100); ba.recalc(); ba.total = B(1e15); ba.cookies = B(1e12); const baBefore = N(ba.cps);
@@ -161,16 +161,16 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Singularitäts-Test OK');
 }
 
-// ---- 10^25 Upgrades: Mega-Stufen bis 10^23 je Reihe ----
+// ---- 10^47 Upgrades: Mega-Stufen bis 5·10^44 je Reihe ----
 {
   const { SERIES_LEVELS, TOTAL_ALL, TOTAL_ALL_TEXT, fmtUp } = await import('../js/mega.js');
-  assert.equal(TOTAL_ALL, 10n ** 25n); assert.ok(SERIES_LEVELS > 4.99e22 && SERIES_LEVELS < 5.01e22); assert.equal(TOTAL_ALL_TEXT, '10 Qa'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
-  const g = new Game(); g.owned[0] = 20; g.recalc(); g.cookies = B('1e' + '9'.repeat(25)); g.total = g.cookies; // Exponent ~1e25: genug für alle Stufen
+  assert.equal(TOTAL_ALL, 10n ** 47n); assert.ok(SERIES_LEVELS > 4.99e44 && SERIES_LEVELS < 5.01e44); assert.equal(TOTAL_ALL_TEXT, '1,00e47'); assert.equal(fmtUp(5e44), '500 Dc'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
+  const g = new Game(); g.owned[0] = 20; g.recalc(); g.cookies = B('1e' + '9'.repeat(45)); g.total = g.cookies; // Exponent ~1e45: genug für alle Stufen
   const t0 = Date.now(); const got = g.buySeries(0, 'max'); assert.ok(Date.now() - t0 < 2000, 'keine Endlosschleife');
-  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e19, 'Produktion wächst mit 5·10^22 Stufen');
+  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e41, 'Produktion wächst mit 5·10^44 Stufen');
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.series[0], SERIES_LEVELS, 'Speichern/Laden');
-  const b = new Game(); b.owned.fill(100); b.recalc(); b.cookies = B('1e' + '9'.repeat(25)); b.total = b.cookies; assert.ok(b.buyAllSeries() > 1e22, '„Alle kaufen“ mit riesigen Stufen');
-  console.log('10^25-Upgrades-Test OK');
+  const b = new Game(); b.owned.fill(100); b.recalc(); b.cookies = B('1e' + '9'.repeat(45)); b.total = b.cookies; assert.ok(b.buyAllSeries() > 1e40, '„Alle kaufen“ mit riesigen Stufen');
+  console.log('10^47-Upgrades-Test OK');
 }
 
 // ---- 100 neue Gebäude ----
