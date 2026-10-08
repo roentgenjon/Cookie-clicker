@@ -121,7 +121,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'give': return `
         <div class="adm-sec"><h4>🍪 Kekse</h4><div class="adm-grid">${fld('Menge', '<input type="text" id="cAmt" value="1 mio" placeholder="z. B. 1 mio, 5e9, 10k">', 'k, mio, mrd, bio, 5e9 …')}<div class="adm-btns"><button data-act="cGive">➕ Geben</button><button data-act="cTake">➖ Abziehen</button></div></div></div>
         <div class="adm-sec"><h4>😇 Himmelschips</h4><div class="adm-grid">${fld('Anzahl', '<input type="number" id="chAmt" min="1" value="10">')}<div class="adm-btns"><button data-act="chips">Chips geben</button></div></div></div>
-        <div class="adm-sec"><h4>🏭 Gebäude</h4><div class="adm-grid3">${fld('Gebäude', `<select id="bSel">${BUILDINGS.slice(0, BASE_COUNT).map((b, i) => `<option value="${i}">${b.icon} ${esc(b.name)}</option>`).join('')}</select>`)}${fld('Anzahl', '<input type="number" id="bAmt" min="1" max="100000" value="10">', 'bis 100.000')}<div class="adm-btns"><button data-act="building">Geben</button></div></div></div>`;
+        <div class="adm-sec"><h4>🏭 Gebäude</h4><div class="adm-grid3">${fld('Gebäude', `<select id="bSel"><optgroup label="Klassisch">${BUILDINGS.slice(0, BASE_COUNT).map((b, i) => `<option value="${i}">${b.icon} ${esc(b.name)}</option>`).join('')}</optgroup><optgroup label="Neue Gebäude (${BUILDINGS.length - BASE_COUNT})">${BUILDINGS.slice(BASE_COUNT).map((b, i) => `<option value="${i + BASE_COUNT}">${b.icon} ${esc(b.name)}</option>`).join('')}</optgroup></select>`)}${fld('Anzahl', '<input type="number" id="bAmt" min="1" max="100000" value="10">', 'bis 100.000')}<div class="adm-btns"><button data-act="building">Geben</button></div></div></div>`;
       case 'up': return `
         <div class="adm-hint">Schaltet Upgrades und Erfolge frei oder entfernt sie.</div>
         <div class="adm-sec"><h4>🧪 Upgrades (400.000)</h4><div class="adm-btns wrap"><button data-act="up" data-m="all">Alle freischalten</button><button data-act="up" data-m="cookie">Nur Cookie-Upgrades</button><button data-act="up" data-m="heaven">Nur himmlische</button><button class="danger" data-act="up" data-m="none">Alle entfernen</button></div></div>
@@ -251,7 +251,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return send({ type: 'cookies', amount: (act === 'cGive' ? '' : '-') + n.toString() }, `${act === 'cGive' ? '+' : '−'}${fmt(n)} Kekse`);
       }
       case 'chips': return send({ type: 'chips', amount: intIn('#chAmt', 1, 1e9, 1) }, `${intIn('#chAmt', 1, 1e9, 1)} Chips`);
-      case 'building': return send({ type: 'building', b: intIn('#bSel', 0, 14, 0), amount: intIn('#bAmt', 1, 100000, 1) }, `${intIn('#bAmt', 1, 100000, 1)}× ${BUILDINGS[intIn('#bSel', 0, 14, 0)].name}`);
+      case 'building': return send({ type: 'building', b: intIn('#bSel', 0, BUILDINGS.length - 1, 0), amount: intIn('#bAmt', 1, 100000, 1) }, `${intIn('#bAmt', 1, 100000, 1)}× ${BUILDINGS[intIn('#bSel', 0, BUILDINGS.length - 1, 0)].name}`);
       case 'up': return send({ type: 'upgrades', mode: btn.dataset.m }, { all: 'Alle Upgrades', cookie: 'Cookie-Upgrades', heaven: 'Himmlische Upgrades', none: 'Upgrades entfernen' }[btn.dataset.m]);
       case 'ach': return send({ type: 'achievements' }, 'Alle Erfolge');
       case 'tpl': { const t = $('#msg'); t.value = btn.dataset.t; $('#cnt').textContent = `${t.value.length} / 140`; t.focus(); return; }
