@@ -28,7 +28,8 @@ const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', 
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
 const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
-const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls'];
+const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog'];
+const LOG_TAB = ['adminlog', '🧾 Admin-Protokoll']; // nur für Entity_2806 (der Server prüft das ebenfalls)
 // Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
 export function parseDur(txt) {
   const m = /^\s*(\d+(?:[.,]\d+)?)\s*([a-zäöü]*)\s*$/i.exec(String(txt));
@@ -52,7 +53,8 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.closest('dialog')?.classList.add('wide');
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
-  let players = []; let pollItems = null; let banItems = null; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -93,6 +95,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     return e.type || '?';
   };
   async function loadSched() { try { schedItems = (await cloud.admin('schedList')).items; } catch { schedItems = []; } }
+  async function loadLog() { try { logItems = (await cloud.admin('adminLog')).items; } catch (e) { logItems = { error: e.message }; } }
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
@@ -142,6 +145,15 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         ${st === 'cookies' ? fld('Menge', '<input type="text" id="sAmt" value="1 mio">', 'z. B. 1 mio, 5e9') : ''}
         <button class="adm-go" data-act="schedAdd">⏰ Planen</button>
         <div class="adm-sec"><h4>Geplant (${schedItems ? schedItems.length : '…'})</h4>${items}</div>`;
+      }
+      case 'adminlog': {
+        if (!logItems) return '<div class="adm-empty">Lade…</div>';
+        if (logItems.error) return `<div class="adm-hint">${esc(logItems.error)}</div>`;
+        const f = logQ.trim().toLowerCase();
+        const rows = logItems.filter((x) => !f || `${x.by} ${x.to} ${x.d}`.toLowerCase().includes(f));
+        return `<div class="adm-hint">Alle Admin-Aktionen (die letzten 500), neueste zuerst. Dieses Protokoll siehst nur du.</div>
+        <div class="adm-search"><input type="text" id="logQ" placeholder="🔍 Suchen (Admin, Spieler, Aktion)…" value="${esc(logQ)}"><button data-act="logReload" title="Neu laden">🔄</button></div>
+        ${rows.length ? rows.map((x) => `<div class="adm-sched"><span>${ago(x.t)}</span><span><b>${esc(x.by)}</b>${x.to ? ` → <b>${esc(x.to)}</b>` : ''}<br><small>${esc(x.d)}</small></span><span></span></div>`).join('') : '<div class="adm-hint">Keine Einträge.</div>'}`;
       }
       case 'polls': {
         const list = pollItems === null ? '<div class="adm-empty">Lade…</div>' : pollItems.length ? pollItems.map((p) => `<div class="adm-sec"><h4>${p.open ? '🟢' : '⚪'} ${esc(p.q)} <small>${p.total} Stimmen</small></h4>${p.opts.map((o, i) => `<div class="adm-sched"><span>${esc(o)}</span><span>${p.total ? Math.round((p.counts[i] / p.total) * 100) : 0} % (${p.counts[i]})</span><span></span></div>`).join('')}<div class="adm-btns wrap"><button data-act="pollClose" data-id="${p.id}">${p.open ? '🔒 Beenden' : '🔓 Wieder öffnen'}</button><button class="danger" data-act="pollDel" data-id="${p.id}">🗑️ Löschen</button></div></div>`).join('') : '<div class="adm-hint">Noch keine Umfragen.</div>';
@@ -203,15 +215,16 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         </aside>
         <section class="adm-main">
           ${sel && !GLOBAL_TABS.includes(tab) ? `<div class="adm-target ${sel === ALL ? 'all' : ''}"><span>🎯 Ziel</span><b>${esc(nameOf(sel))}</b>${cur ? `<small>${online(cur) ? '🟢 online' : '⚪ offline'} · ${fmt(cur.score)} gebacken</small>` : '<small>Rundsendung an alle Spieler</small>'}</div>` : ''}
-          <div class="adm-tabs">${TABS.map(([k, t]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</div>
+          <div class="adm-tabs">${(isLogViewer ? [...TABS, LOG_TAB] : TABS).map(([k, t]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</div>
           ${GLOBAL_TABS.includes(tab) || sel ? `<div class="adm-pane">${paneHtml()}</div>` : '<div class="adm-empty big">👈 Wähle in der Liste einen Spieler oder „Alle Spieler“, um Aktionen zu senden. Die Reiter „Zeitplan“ und „Admins“ brauchen keine Auswahl.</div>'}
           ${note ? `<div class="adm-status ${note.ok ? 'ok' : 'err'}">${note.ok ? '✔' : '❌'} ${esc(note.text)}</div>` : ''}
         </section>
       </div>`;
-    for (const [id, v] of Object.entries(keep)) { const el = root.querySelector('#' + id); if (el && id !== 'q') el.value = v; }
+    for (const [id, v] of Object.entries(keep)) { const el = root.querySelector('#' + id); if (el && id !== 'q' && id !== 'logQ') el.value = v; }
     const sw = $('#sWhen'); if (sw && !sw.value) sw.value = localInput(new Date(Date.now() + 10 * 60000));
     const stp = $('#sType'); if (stp) stp.addEventListener('change', paint);
     const mt = $('#msg'); if (mt) { $('#cnt').textContent = `${mt.value.length} / 140`; mt.addEventListener('input', () => { $('#cnt').textContent = `${mt.value.length} / 140`; }); }
+    const lq = $('#logQ'); if (lq) lq.addEventListener('input', (ev) => { logQ = ev.target.value; const pos = ev.target.selectionStart; paint(); const n = $('#logQ'); n.focus(); n.setSelectionRange(pos, pos); });
     $('#q').addEventListener('input', (e) => { q = e.target.value; const pos = e.target.selectionStart; paint(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); });
   }
 
@@ -220,7 +233,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const row = e.target.closest('.adm-row[data-id]');
     if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -296,6 +309,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         try { await call('ban', { target: sel, banned: !p.banned, reason, minutes }); say(p.banned ? `${p.name} entsperrt` : `${p.name} gesperrt`); await refresh(); } catch { return; }
         return paint();
       }
+      case 'logReload': { await loadLog(); return paint(); }
       case 'pollAdd': {
         const q = val('#pq').trim(); const opts = val('#po').split('\n').map((x) => x.trim()).filter(Boolean);
         if (q.length < 3 || opts.length < 2 || opts.length > 6) { say('Eine Frage und 2 bis 6 Antworten (je eine pro Zeile) eingeben', false); return paint(); }

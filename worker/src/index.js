@@ -136,6 +136,53 @@ async function listPlayers(env) {
   return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, sl: lg(k.metadata.sl, k.metadata.s), cps: k.metadata.c || 0, cl: lg(k.metadata.cl, k.metadata.c), asc: k.metadata.a || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
 }
 
+// ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
+const LOG_VIEWER = 'entity_2806';
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel']);
+function describeEvent(e) {
+  if (!e || typeof e !== 'object') return '';
+  switch (e.type) {
+    case 'golden': return `${e.count}× goldene Kekse (${e.effect})`;
+    case 'cookies': return `Kekse ${String(e.amount).startsWith('-') ? 'abgezogen' : 'gegeben'}: ${String(e.amount).replace(/^-/, '').replace(/(\.\d*?)0+e/, '$1e').replace(/\.e/, 'e')}`;
+    case 'chips': return `${e.amount} Himmelschips gegeben`;
+    case 'building': return `${e.amount}× Gebäude Nr. ${Number(e.b) + 1} gegeben`;
+    case 'buff': return `${e.kind === 'click' ? 'Klick' : 'Kekse'}-Raserei ×${e.mult} für ${e.seconds} s`;
+    case 'achievements': return 'alle Erfolge freigeschaltet';
+    case 'upgrades': return { all: 'alle Upgrades freigeschaltet', cookie: 'alle Cookie-Upgrades freigeschaltet', heaven: 'alle himmlischen Upgrades freigeschaltet', none: 'alle Upgrades entfernt' }[e.mode] || 'Upgrades geändert';
+    case 'message': return `Nachricht „${String(e.text).slice(0, 80)}“`;
+    case 'reset': return 'Spielstand zurückgesetzt';
+    default: return String(e.type || '');
+  }
+}
+function describeAdmin(b) {
+  const q = (t) => `„${String(t || '').slice(0, 80)}“`;
+  switch (b.action) {
+    case 'event': return describeEvent(b.event);
+    case 'broadcast': return [b.text ? `Nachricht an alle ${q(b.text)}` : '', b.event ? describeEvent(b.event) : ''].filter(Boolean).join(' · ');
+    case 'ban': return b.banned ? `gesperrt${Number(b.minutes) > 0 ? ` für ${Math.floor(b.minutes)} Min` : ' (dauerhaft)'}${b.reason ? ` – Grund ${q(b.reason)}` : ''}${b.keep ? ' (Nachricht geändert)' : ''}` : 'entsperrt';
+    case 'mute': return Number(b.minutes) > 0 ? `stumm für ${Math.floor(b.minutes)} Min` : 'Stumm aufgehoben';
+    case 'delete': return 'Konto gelöscht';
+    case 'inspect': return 'Spielstand angesehen';
+    case 'chatDel': return 'Chat-Nachricht gelöscht';
+    case 'chatClear': return 'gesamten Chat geleert';
+    case 'adminAdd': return `${String(b.name || '').slice(0, 16)} zum Admin gemacht`;
+    case 'adminDel': return 'Admin-Rechte entzogen';
+    case 'schedAdd': return `geplant für ${new Date(Number(b.at)).toISOString().slice(0, 16).replace('T', ' ')} UTC: ${[b.text ? q(b.text) : '', b.event ? describeEvent(b.event) : ''].filter(Boolean).join(' · ')}`;
+    case 'schedDel': return 'geplanten Eintrag gelöscht';
+    case 'pollCreate': return `Umfrage gestartet ${q(b.q)}`;
+    case 'pollClose': return 'Umfrage beendet/geöffnet';
+    case 'pollDel': return 'Umfrage gelöscht';
+    case 'appealReply': return `Einspruch beantwortet ${q(b.text)}`;
+    case 'appealDel': return 'Einspruch gelöscht';
+    default: return b.action;
+  }
+}
+async function logAdmin(env, b, me, targetName) {
+  const list = (await env.SAVES.get('adminlog', 'json')) || [];
+  list.unshift({ t: Date.now(), by: me, a: b.action, to: targetName || (b.action === 'broadcast' || b.action === 'schedAdd' ? 'ALLE' : ''), d: describeAdmin(b) });
+  await env.SAVES.put('adminlog', JSON.stringify(list.slice(0, 500)));
+}
+
 async function admin(env, b) {
   const admins = await adminMap(env);
   const au = await authenticate(env, b);
@@ -145,7 +192,12 @@ async function admin(env, b) {
   const target = typeof b.target === 'string' && ID_RE.test(b.target) ? b.target : null;
   const needTarget = async () => (target && (await env.SAVES.get('p:' + target, 'json'))) || null;
 
-  switch (b.action) {
+  const targetName = target ? ((await env.SAVES.getWithMetadata('p:' + target, 'text')).metadata || {}).n || '' : ''; // vor dem Ausführen lesen (bei „Konto löschen“ gäbe es den Namen danach nicht mehr)
+  if (b.action === 'adminLog') {
+    if (me.toLowerCase() !== LOG_VIEWER) return fail(env, 'Das Admin-Protokoll darf nur Entity_2806 sehen.', 403);
+    return json(env, { items: (await env.SAVES.get('adminlog', 'json')) || [] });
+  }
+  const run = async () => { switch (b.action) {
     case 'whoami': return json(env, { admin: true, name: me });
     case 'players': {
       const on = new Set(await onlineIds(env));
@@ -278,7 +330,10 @@ async function admin(env, b) {
       return json(env, { ok: true });
     }
     default: return fail(env, 'Unbekannte Aktion');
-  }
+  } };
+  const res = await run();
+  if (res.status === 200 && ADMIN_LOGGED.has(b.action)) { try { await logAdmin(env, b, me, b.action === 'adminDel' ? ((await adminMap(env))[target] || targetName) : targetName); } catch { /* Protokoll darf nie die Aktion verhindern */ } }
+  return res;
 }
 
 // ---- Speicher: Cloudflare D1 (SQLite) mit KV-ähnlicher Schnittstelle -------------------------------
