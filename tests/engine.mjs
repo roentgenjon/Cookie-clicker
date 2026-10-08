@@ -200,3 +200,11 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   g.sing = 1000; g.recalc(); assert.ok(Math.abs(g.gFrenzy - fr0 * 2) < 1e-9, 'Stufe 1000: Raserei ×2');
   console.log('Meilenstein-Test OK');
 }
+
+// ---- Gebäude-Geschenk als Nachricht (klappt auch mit altem Server) ----
+{
+  const g = new Game(); const txt = g.applyEvent({ type: 'message', text: '🎁bld:114:7' });
+  assert.equal(g.owned[114], 7); assert.ok(/7×/.test(txt) && /Urknall/.test(txt)); assert.equal(g.applyEvent({ type: 'message', text: '🎁bld:115:7' }), '🎁bld:115:7', 'ungültige Nummer = normale Nachricht'); assert.equal(g.owned.length, 115);
+  assert.equal(g.applyEvent({ type: 'message', text: 'Hallo' }), 'Hallo'); assert.equal(g.applyEvent({ type: 'message', text: '🎁bld:20:1000000' }), '🎁bld:20:1000000');
+  console.log('Gebäude-Nachricht-Test OK');
+}

@@ -368,7 +368,12 @@ export class Game {
           else if (ev.mode === 'all' || (ev.mode === 'cookie' && i < HEAVEN_START) || (ev.mode === 'heaven' && i >= HEAVEN_START)) this.bought[i] = 1;
         }
         this.recalc(); return ev.mode === 'none' ? 'Alle Upgrades wurden entfernt.' : 'Upgrades freigeschaltet!';
-      case 'message': return ev.text;
+      case 'message': {
+        // Gebäude-Geschenk als Nachricht verpackt („🎁bld:<Nr.>:<Anzahl>“): funktioniert auch mit älteren Servern, die nur die ersten 15 Gebäude als eigenes Ereignis kennen
+        const m = /^🎁bld:(\d{1,3}):(\d{1,6})$/.exec(String(ev.text || ''));
+        if (m && +m[1] < BUILDINGS.length && +m[2] >= 1 && +m[2] <= 100000) { this.owned[+m[1]] += +m[2]; this.updateCps(); return `+${m[2]}× ${BUILDINGS[+m[1]].name}!`; }
+        return ev.text;
+      }
       case 'reset': { const n = this.name; this.hardReset(); this.name = n; return 'Dein Spielstand wurde zurückgesetzt.'; }
       default: return null;
     }

@@ -251,7 +251,11 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return send({ type: 'cookies', amount: (act === 'cGive' ? '' : '-') + n.toString() }, `${act === 'cGive' ? '+' : '−'}${fmt(n)} Kekse`);
       }
       case 'chips': return send({ type: 'chips', amount: intIn('#chAmt', 1, 1e9, 1) }, `${intIn('#chAmt', 1, 1e9, 1)} Chips`);
-      case 'building': return send({ type: 'building', b: intIn('#bSel', 0, BUILDINGS.length - 1, 0), amount: intIn('#bAmt', 1, 100000, 1) }, `${intIn('#bAmt', 1, 100000, 1)}× ${BUILDINGS[intIn('#bSel', 0, BUILDINGS.length - 1, 0)].name}`);
+      case 'building': {
+        const bi = intIn('#bSel', 0, BUILDINGS.length - 1, 0), am = intIn('#bAmt', 1, 100000, 1);
+        // Die ersten 15 als normales Ereignis, die neuen als Nachricht verpackt (so klappt es auch ohne Server-Update)
+        return send(bi < BASE_COUNT ? { type: 'building', b: bi, amount: am } : { type: 'message', text: `🎁bld:${bi}:${am}` }, `${am}× ${BUILDINGS[bi].name}`);
+      }
       case 'up': return send({ type: 'upgrades', mode: btn.dataset.m }, { all: 'Alle Upgrades', cookie: 'Cookie-Upgrades', heaven: 'Himmlische Upgrades', none: 'Upgrades entfernen' }[btn.dataset.m]);
       case 'ach': return send({ type: 'achievements' }, 'Alle Erfolge');
       case 'tpl': { const t = $('#msg'); t.value = btn.dataset.t; $('#cnt').textContent = `${t.value.length} / 140`; t.focus(); return; }
