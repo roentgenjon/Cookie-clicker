@@ -157,3 +157,39 @@ export function renderTime(body, { game, fmt, toast, title }) {
     toast(`⏳ <b>${m.text}</b>${m.gain ? ` +${fmt(m.gain)} Kekse` : ''}`); paint();
   };
 }
+
+
+// ---------- Gilden ----------
+export async function renderGuild(body, { fmt, toast, title }) {
+  title('🏰 Gilde');
+  if (!cloud.loggedIn) { body.innerHTML = '<p class="note">Melde dich an (☁️), um einer Gilde beizutreten oder eine zu gründen.</p>'; return; }
+  const pw = (sl) => fmt(Big.fromLog(Math.max(0, sl)));
+  const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { toast('❌ ' + e.message); } paint(); };
+  let timer = 0;
+  async function paint() {
+    let me; try { me = (await cloud.guild('me')).guild; } catch (e) { body.innerHTML = `<p class="note">❌ ${esc(e.message)}</p>`; return; }
+    if (!body.isConnected) return;
+    if (me) {
+      title(`🏰 ${me.name} [${me.tag}]`);
+      const keep = body.querySelector('#gcIn') ? body.querySelector('#gcIn').value : '';
+      body.innerHTML = `<div class="shop-top"><div><b>${me.members.length} Mitglieder · zusammen ${pw(me.power)} Kekse</b><div class="note">Gründer: ${esc((me.members.find((m) => m.owner) || {}).name || '?')}</div></div></div>
+        <div class="adm-sec"><h4>👥 Mitglieder</h4>${me.members.map((m) => `<div class="adm-sched"><span>${m.online ? '🟢' : '⚪'} ${m.owner ? '👑 ' : ''}${esc(m.name)}</span><span>${pw(m.sl)} gebacken${m.sg ? ` · 🕳️ ${m.sg}` : ''}</span>${me.owner && !m.owner ? `<button class="danger" data-kick="${esc(m.name)}">Entfernen</button>` : '<span></span>'}</div>`).join('')}</div>
+        <div class="adm-sec"><h4>💬 Gilden-Chat</h4><div class="gchat">${me.chat.length ? me.chat.slice(-30).map((m) => `<div><b>${esc(m.n)}</b> <span class="note">${new Date(m.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span><br>${esc(m.x)}</div>`).join('') : '<div class="note">Noch keine Nachrichten.</div>'}</div>
+        <form id="gcForm" class="rowf"><input type="text" id="gcIn" maxlength="200" placeholder="Nachricht an die Gilde …" value="${esc(keep)}"><button>Senden</button></form></div>
+        <button id="gLeave" class="danger">🚪 Gilde verlassen</button>`;
+      const box = body.querySelector('.gchat'); if (box) box.scrollTop = box.scrollHeight;
+      body.querySelector('#gcForm').onsubmit = (e) => { e.preventDefault(); const t = body.querySelector('#gcIn').value.trim(); if (t) run(async () => { await cloud.guild('chat', { text: t }); body.querySelector('#gcIn').value = ''; }); };
+      body.querySelector('#gLeave').onclick = () => { if (confirm('Gilde wirklich verlassen?')) run(() => cloud.guild('leave'), 'Du hast die Gilde verlassen'); };
+      body.querySelectorAll('[data-kick]').forEach((b) => { b.onclick = () => run(() => cloud.guild('kick', { name: b.dataset.kick }), 'Entfernt'); });
+    } else {
+      title('🏰 Gilden');
+      let list = []; try { list = (await cloud.guildList()).guilds; } catch { /* leer */ }
+      body.innerHTML = `<div class="adm-sec"><h4>➕ Eigene Gilde gründen</h4><form id="gNew" class="adm-grid"><label class="fld"><span>Name</span><input type="text" id="gnName" maxlength="16" placeholder="z. B. Keksbande"></label><label class="fld"><span>Kürzel (2–4)</span><input type="text" id="gnTag" maxlength="4" placeholder="KEKS"></label><div class="adm-btns"><button>🏰 Gründen</button></div></form></div>
+        <div class="adm-sec"><h4>🏆 Gilden-Rangliste</h4>${list.length ? list.map((g, i) => `<div class="adm-sched"><span>${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} <b>${esc(g.name)}</b> [${esc(g.tag)}]</span><span>${g.members}/20 · ${g.power >= 0 ? pw(g.power) : '–'}</span><button data-join="${g.id}" ${g.open ? '' : 'disabled'}>${g.open ? 'Beitreten' : 'Voll'}</button></div>`).join('') : '<div class="note">Noch keine Gilden – gründe die erste!</div>'}</div>`;
+      body.querySelector('#gNew').onsubmit = (e) => { e.preventDefault(); run(() => cloud.guild('create', { name: body.querySelector('#gnName').value, tag: body.querySelector('#gnTag').value }), '🏰 Gilde gegründet'); };
+      body.querySelectorAll('[data-join]').forEach((b) => { b.onclick = () => run(() => cloud.guild('join', { gid: b.dataset.join }), '🏰 Beigetreten'); });
+    }
+  }
+  await paint();
+  clearInterval(timer); timer = setInterval(() => { if (!body.isConnected || !document.querySelector('#modal[open]') || document.querySelector('#modalTitle').textContent.indexOf('🏰') !== 0) { clearInterval(timer); return; } if (!body.querySelector('#gcIn') || document.activeElement !== body.querySelector('#gcIn')) paint(); }, 8000);
+}

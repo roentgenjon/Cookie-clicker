@@ -85,7 +85,77 @@ async function afterSave(env, id, name, prev, dd) {
   const rec = { n: old.n + 1, reasons: [...reasons, ...old.reasons].slice(0, 6), t: now };
   await env.SAVES.put('sus:' + id, JSON.stringify(rec), { metadata: { n: name, c: rec.n, t: now, r: rec.reasons[0] }, expirationTtl: 60 * 60 * 24 * 30 });
 }
-const MAINT_PATHS = new Set(['/api/save', '/api/gift', '/api/chat/send', '/api/polls/vote', '/api/appeal']);
+
+// ---- Gilden: bis zu 20 Mitglieder, Gilden-Chat, Rangliste nach gemeinsamen Keksen ----
+const GUILD_MAX = 20;
+const cleanTag = (t) => String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+const guildOf = async (env, id) => { const gid = await env.SAVES.get('pg:' + id); return gid ? { gid, g: await env.SAVES.get('guild:' + gid, 'json') } : { gid: null, g: null }; };
+const logSum = (ls) => { const m = Math.max(...ls); return m + Math.log10(ls.reduce((a, l) => a + Math.pow(10, l - m), 0)); }; // log10 einer Summe aus log10-Werten
+async function guildsPublic(env) {
+  const keys = (await env.SAVES.list({ prefix: 'guild:', limit: 200 })).keys;
+  const players = new Map((await listPlayers(env)).map((p) => [p.id, p]));
+  const out = [];
+  for (const k of keys) {
+    const g = await env.SAVES.get(k.name, 'json'); if (!g) continue;
+    const ms = g.members.map((id) => players.get(id)).filter((p) => p && !p.banned);
+    out.push({ id: g.id, name: g.name, tag: g.tag, members: g.members.length, owner: (players.get(g.owner) || {}).name || '?', power: ms.length ? logSum(ms.map((p) => p.sl)) : -1, open: g.members.length < GUILD_MAX });
+  }
+  return out.sort((a, b) => b.power - a.power);
+}
+async function guildDetail(env, g, myId) {
+  const players = new Map((await listPlayers(env)).map((p) => [p.id, p])); const on = new Set(await onlineIds(env));
+  const members = g.members.map((id) => players.get(id)).filter(Boolean).map((p) => ({ name: p.name, sl: p.sl, sg: p.sg, online: on.has(p.id), owner: p.id === g.owner, banned: p.banned })).sort((a, b) => b.sl - a.sl);
+  const chat = (await env.SAVES.get('gchat:' + g.id, 'json')) || [];
+  return { id: g.id, name: g.name, tag: g.tag, owner: g.owner === myId, members, chat: chat.map(({ i, t, n, x }) => ({ i, t, n, x })), power: members.filter((m) => !m.banned).length ? logSum(members.filter((m) => !m.banned).map((m) => m.sl)) : -1 };
+}
+async function guildApi(env, req, path) {
+  const b = await req.json();
+  if (path === '/api/guild/list') return json(env, { guilds: await guildsPublic(env) });
+  const au = await authenticate(env, b); if (au.err) return au.err;
+  const { gid, g } = await guildOf(env, b.id);
+  const meta = (await env.SAVES.getWithMetadata('p:' + b.id, 'text')).metadata || {};
+  if (path === '/api/guild/me') { if (!g) { if (gid) await env.SAVES.delete('pg:' + b.id); return json(env, { guild: null }); } return json(env, { guild: await guildDetail(env, g, b.id) }); }
+  if (path === '/api/guild/create') {
+    if (g) return fail(env, 'Du bist schon in einer Gilde.');
+    const name = cleanName(b.name); const tag = cleanTag(b.tag);
+    if (name.length < 3 || tag.length < 2) return fail(env, 'Name (mind. 3 Zeichen) und Kürzel (2–4 Buchstaben/Zahlen) angeben');
+    const nk = 'gname:' + name.toLowerCase(); if (await env.SAVES.get(nk)) return fail(env, 'Diesen Gilden-Namen gibt es schon.');
+    const id = rid().slice(0, 8);
+    await env.SAVES.put(nk, id); await env.SAVES.put('guild:' + id, JSON.stringify({ id, name, tag, owner: b.id, members: [b.id], created: Date.now() })); await env.SAVES.put('pg:' + b.id, id);
+    return json(env, { ok: true });
+  }
+  if (path === '/api/guild/join') {
+    if (g) return fail(env, 'Du bist schon in einer Gilde.');
+    const tg = await env.SAVES.get('guild:' + String(b.gid), 'json'); if (!tg) return fail(env, 'Gilde nicht gefunden', 404);
+    if (tg.members.length >= GUILD_MAX) return fail(env, 'Die Gilde ist voll.');
+    tg.members.push(b.id); await env.SAVES.put('guild:' + tg.id, JSON.stringify(tg)); await env.SAVES.put('pg:' + b.id, tg.id);
+    return json(env, { ok: true });
+  }
+  if (!g) return fail(env, 'Du bist in keiner Gilde.');
+  if (path === '/api/guild/leave') {
+    g.members = g.members.filter((m) => m !== b.id); await env.SAVES.delete('pg:' + b.id);
+    if (!g.members.length) { await env.SAVES.delete('guild:' + g.id); await env.SAVES.delete('gname:' + g.name.toLowerCase()); await env.SAVES.delete('gchat:' + g.id); }
+    else { if (g.owner === b.id) g.owner = g.members[0]; await env.SAVES.put('guild:' + g.id, JSON.stringify(g)); }
+    return json(env, { ok: true });
+  }
+  if (path === '/api/guild/kick') {
+    if (g.owner !== b.id) return fail(env, 'Nur der Gründer kann Mitglieder entfernen.', 403);
+    const tid = await nameToId(b.name || ''); if (tid === b.id || !g.members.includes(tid)) return fail(env, 'Mitglied nicht gefunden');
+    g.members = g.members.filter((m) => m !== tid); await env.SAVES.delete('pg:' + tid); await env.SAVES.put('guild:' + g.id, JSON.stringify(g));
+    return json(env, { ok: true });
+  }
+  if (path === '/api/guild/chat') {
+    const text = cleanChat(b.text); if (!text) return fail(env, 'Leere Nachricht');
+    if (await env.SAVES.get('mute:' + b.id)) return fail(env, 'Du bist stumm geschaltet.', 403, { muted: true });
+    const list = (await env.SAVES.get('gchat:' + g.id, 'json')) || []; const now = Date.now();
+    const mine = [...list].reverse().find((m) => m.u === b.id); if (mine && now - mine.t < 1500) return fail(env, 'Nicht so schnell!', 429);
+    list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, n: meta.n || 'Anonym', u: b.id, x: text });
+    await env.SAVES.put('gchat:' + g.id, JSON.stringify(list.slice(-50)));
+    return json(env, { ok: true });
+  }
+  return fail(env, 'Unbekannte Gilden-Aktion', 404);
+}
+const MAINT_PATHS = new Set(['/api/save', '/api/gift', '/api/chat/send', '/api/polls/vote', '/api/appeal', '/api/guild/create', '/api/guild/join', '/api/guild/chat']);
 const today = () => new Date().toISOString().slice(0, 10);
 
 // Brute-Force-Schutz
@@ -171,7 +241,7 @@ async function listPlayers(env) {
 
 // ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
 const LOG_VIEWER = 'entity_2806';
-const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
 function describeEvent(e) {
   if (!e || typeof e !== 'object') return '';
   switch (e.type) {
@@ -208,6 +278,7 @@ function describeAdmin(b) {
     case 'appealReply': return `Einspruch beantwortet ${q(b.text)}`;
     case 'appealDel': return 'Einspruch gelöscht';
     case 'pollShare': return 'Umfrage-Ergebnis im Chat geteilt';
+    case 'guildDel': return 'Gilde aufgelöst';
     case 'maintSet': return b.on ? `Wartungsmodus an ${q(b.msg)}` : 'Wartungsmodus aus';
     case 'backupRestore': return 'Sicherung wiederhergestellt';
     case 'susDel': return 'Verdachtsmeldung erledigt';
@@ -384,6 +455,13 @@ async function admin(env, b) {
       await env.SAVES.put('rb:' + target, '1', { expirationTtl: 60 * 60 * 24 * 7 });
       return json(env, { ok: true });
     }
+    case 'guildDel': {
+      const g = await env.SAVES.get('guild:' + String(b.gid), 'json'); if (!g) return fail(env, 'Gilde nicht gefunden', 404);
+      for (const m of g.members) await env.SAVES.delete('pg:' + m);
+      await env.SAVES.delete('guild:' + g.id); await env.SAVES.delete('gname:' + g.name.toLowerCase()); await env.SAVES.delete('gchat:' + g.id);
+      return json(env, { ok: true });
+    }
+    case 'guildList': return json(env, { items: await guildsPublic(env) });
     case 'banLog': return json(env, { items: (await env.SAVES.get('banlog', 'json')) || [] });
     case 'appealList': {
       const l = await env.SAVES.list({ prefix: 'appeal:', limit: 200 });
@@ -403,7 +481,7 @@ async function admin(env, b) {
     case 'delete': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gelöscht werden', 403);
-      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:', 'appeal:', 'seen:', 'bk:', 'sus:', 'rb:'].map((p) => env.SAVES.delete(p + target)));
+      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:', 'appeal:', 'seen:', 'bk:', 'sus:', 'rb:', 'pg:'].map((p) => env.SAVES.delete(p + target)));
       return json(env, { ok: true });
     }
     default: return fail(env, 'Unbekannte Aktion');
@@ -477,6 +555,7 @@ export default {
         const m = await maintOf(env);
         if (m) { let who = null; try { who = (await req.clone().json()).id; } catch { /* egal */ } if (!who || !(await adminMap(env))[who]) return fail(env, 'Wartungsarbeiten – bitte später wieder versuchen.', 503, { maintenance: true, msg: m.msg }); }
       }
+      if (url.pathname.startsWith('/api/guild/') && req.method === 'POST') return guildApi(env, req, url.pathname);
       if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
         const by = ['score', 'cps', 'asc', 'sing'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';
         const key = by === 'score' ? 'sl' : by === 'cps' ? 'cl' : by === 'sing' ? 'sg' : 'asc';

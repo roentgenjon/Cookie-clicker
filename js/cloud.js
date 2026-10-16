@@ -75,5 +75,7 @@ export const cloud = {
   polls() { return post('/api/polls', 'POST', { id: this.id, secret: this.secret }); },
   pollVote(poll, opt) { return post('/api/polls/vote', 'POST', { id: this.id, secret: this.secret, poll, opt }); },
   appeal(text) { return post('/api/appeal', 'POST', { id: this.id, secret: this.secret, text }); },
+  guildList() { return post('/api/guild/list', 'POST', {}); },
+  guild(path, extra = {}) { return post('/api/guild/' + path, 'POST', { id: this.id, secret: this.secret, ...extra }); },
   gift(to, amount) { return post('/api/gift', 'POST', { id: this.id, secret: this.secret, to, amount }); },
 };
