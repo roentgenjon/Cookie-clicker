@@ -53,6 +53,39 @@ async function pollsWithVotes(env, myId) {
   }
   return out;
 }
+
+// ---- Wartungsmodus, Saison-Events, Sicherungen, Cheat-Erkennung ----
+const maintOf = async (env) => { const m = await env.SAVES.get('maint', 'json'); return m && m.on ? { msg: m.msg || '', by: m.by || '' } : null; };
+const SEASONS = { halloween: 'Halloween 🎃', xmas: 'Weihnachten 🎄', newyear: 'Neujahr 🎆', easter: 'Ostern 🐰', summer: 'Sommerfest ☀️' };
+function autoSeason(d = new Date()) { // feste Zeiträume (Monat-Tag), jedes Jahr
+  const md = (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  if (md >= 1024 && md <= 1101) return 'halloween';
+  if (md >= 1215 && md <= 1231) return 'xmas';
+  if (md >= 101 && md <= 103) return 'newyear';
+  return '';
+}
+async function currentSeason(env) {
+  const o = await env.SAVES.get('season', 'json'); // Admin-Vorgabe hat Vorrang
+  if (o && o.until > Date.now()) return { id: o.id, name: SEASONS[o.id], until: o.until, auto: false };
+  const a = autoSeason();
+  return a ? { id: a, name: SEASONS[a], until: 0, auto: true } : null;
+}
+const BK_EVERY = 8 * 3600 * 1000, BK_KEEP = 3;
+async function afterSave(env, id, name, prev, dd) {
+  const now = Date.now();
+  const bk = (await env.SAVES.get('bk:' + id, 'json')) || [];
+  if (prev.data && (!bk.length || now - bk[bk.length - 1].t > BK_EVERY)) { bk.push({ t: prev.t, data: prev.data }); await env.SAVES.put('bk:' + id, JSON.stringify(bk.slice(-BK_KEEP)), { expirationTtl: 60 * 60 * 24 * 60 }); }
+  const pd = prev.data || {}; const dt = (now - (prev.t || now)) / 1000;
+  if (dt < 30 || dt > 6 * 3600) return;
+  const reasons = [];
+  const dc = (Number(dd.clicks) || 0) - (Number(pd.clicks) || 0); if (dc > 1500 && dc / dt > 30) reasons.push(`Auto-Klicker? ${Math.round(dc / dt)} Klicks/s (${dc} in ${Math.round(dt)} s)`);
+  const dg = (Number(dd.golden) || 0) - (Number(pd.golden) || 0); if (dg > 100 + dt / 8) reasons.push(`Zu viele goldene Kekse: ${dg} in ${Math.round(dt)} s`);
+  if (!reasons.length) return;
+  const old = (await env.SAVES.get('sus:' + id, 'json')) || { n: 0, reasons: [] };
+  const rec = { n: old.n + 1, reasons: [...reasons, ...old.reasons].slice(0, 6), t: now };
+  await env.SAVES.put('sus:' + id, JSON.stringify(rec), { metadata: { n: name, c: rec.n, t: now, r: rec.reasons[0] }, expirationTtl: 60 * 60 * 24 * 30 });
+}
+const MAINT_PATHS = new Set(['/api/save', '/api/gift', '/api/chat/send', '/api/polls/vote', '/api/appeal']);
 const today = () => new Date().toISOString().slice(0, 10);
 
 // Brute-Force-Schutz
@@ -115,7 +148,7 @@ const CHAT_MAX = 50;
 const cleanChat = (t) => String(t || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 const chatLoad = async (env) => (await env.SAVES.get('chat', 'json')) || [];
 const chatSave = (env, list) => env.SAVES.put('chat', JSON.stringify(list.slice(-CHAT_MAX)));
-const chatPublic = (list) => list.map(({ i, t, n, a, x }) => ({ i, t, n, a, x }));
+const chatPublic = (list) => list.map(({ i, t, n, a, x, k, s }) => ({ i, t, n, a, x, k, s }));
 
 // ---- Zeitplan: fällige Einträge werden beim nächsten Abruf eines Spielers ausgeführt ----
 async function runSched(env) {
@@ -133,12 +166,12 @@ async function listPlayers(env) {
   const bans = new Set((await env.SAVES.list({ prefix: 'ban:', limit: 1000 })).keys.map((k) => k.name.slice(4)));
   const mutes = new Set((await env.SAVES.list({ prefix: 'mute:', limit: 1000 })).keys.map((k) => k.name.slice(5)));
   const lg = (l, v) => (Number.isFinite(l) ? l : v > 0 ? Math.log10(v) : -1); // log10-Werte für Zahlen über 1e300
-  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, sl: lg(k.metadata.sl, k.metadata.s), cps: k.metadata.c || 0, cl: lg(k.metadata.cl, k.metadata.c), asc: k.metadata.a || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
+  return list.keys.filter((k) => k.metadata && Number.isFinite(k.metadata.s)).map((k) => ({ id: k.name.slice(2), name: k.metadata.n, score: k.metadata.s, sl: lg(k.metadata.sl, k.metadata.s), cps: k.metadata.c || 0, cl: lg(k.metadata.cl, k.metadata.c), asc: k.metadata.a || 0, sg: k.metadata.g || 0, ak: k.metadata.k || 0, updated: k.metadata.u || 0, banned: bans.has(k.name.slice(2)), muted: mutes.has(k.name.slice(2)) }));
 }
 
 // ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
 const LOG_VIEWER = 'entity_2806';
-const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel']);
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
 function describeEvent(e) {
   if (!e || typeof e !== 'object') return '';
   switch (e.type) {
@@ -174,6 +207,11 @@ function describeAdmin(b) {
     case 'pollDel': return 'Umfrage gelöscht';
     case 'appealReply': return `Einspruch beantwortet ${q(b.text)}`;
     case 'appealDel': return 'Einspruch gelöscht';
+    case 'pollShare': return 'Umfrage-Ergebnis im Chat geteilt';
+    case 'maintSet': return b.on ? `Wartungsmodus an ${q(b.msg)}` : 'Wartungsmodus aus';
+    case 'backupRestore': return 'Sicherung wiederhergestellt';
+    case 'susDel': return 'Verdachtsmeldung erledigt';
+    case 'seasonSet': return b.season ? `Saison-Event gesetzt (${String(b.season).slice(0, 20)})` : 'Saison-Event beendet';
     default: return b.action;
   }
 }
@@ -307,6 +345,45 @@ async function admin(env, b) {
       else { await env.SAVES.put('polls', JSON.stringify(list.filter((x) => x.id !== b.poll))); for (const k of (await env.SAVES.list({ prefix: `pv:${b.poll}:`, limit: 1000 })).keys) await env.SAVES.delete(k.name); }
       return json(env, { ok: true });
     }
+    case 'pollShare': {
+      const pl = (await pollsWithVotes(env, null)).find((x) => x.id === b.poll); if (!pl) return fail(env, 'Umfrage nicht gefunden', 404);
+      const tot = pl.total || 1;
+      const x = `📊 Umfrage „${pl.q}“ – ${pl.total} Stimmen: ` + pl.opts.map((o, i) => `${o} ${Math.round((pl.counts[i] / tot) * 100)} %`).join(' · ');
+      const list = await chatLoad(env); const now = Date.now();
+      list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, n: '📊 Umfrage', u: 'sys', a: true, x: x.slice(0, 400) });
+      await chatSave(env, list); return json(env, { ok: true });
+    }
+    case 'maintGet': return json(env, { maint: await env.SAVES.get('maint', 'json') });
+    case 'maintSet': {
+      if (b.on) await env.SAVES.put('maint', JSON.stringify({ on: true, msg: String(b.msg || '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140), by: me, t: Date.now() })); else await env.SAVES.delete('maint');
+      return json(env, { ok: true });
+    }
+    case 'seasonGet': return json(env, { season: await currentSeason(env), seasons: SEASONS });
+    case 'seasonSet': {
+      if (!b.season) await env.SAVES.put('season', JSON.stringify({ id: '', until: 0, by: me }), { expirationTtl: 60 });
+      else { if (!SEASONS[b.season]) return fail(env, 'Unbekanntes Event'); const h = Math.max(1, Math.min(Math.floor(Number(b.hours)) || 24, 24 * 60)); await env.SAVES.put('season', JSON.stringify({ id: b.season, until: Date.now() + h * 3600000, by: me })); }
+      return json(env, { ok: true });
+    }
+    case 'susList': {
+      const l = await env.SAVES.list({ prefix: 'sus:', limit: 200 });
+      return json(env, { items: l.keys.map((k) => ({ id: k.name.slice(4), ...(k.metadata || {}) })).sort((x, y) => (y.t || 0) - (x.t || 0)) });
+    }
+    case 'susDel': { if (target) await env.SAVES.delete('sus:' + target); return json(env, { ok: true }); }
+    case 'backupList': {
+      if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
+      const bk = (await env.SAVES.get('bk:' + target, 'json')) || [];
+      return json(env, { items: bk.map((x) => ({ t: x.t, cookies: (x.data || {}).cookies, total: (x.data || {}).total, sing: (x.data || {}).sing || 0, ach: popcount((x.data || {}).ach || ''), ascensions: (x.data || {}).ascensions || 0 })).reverse() });
+    }
+    case 'backupRestore': {
+      const cur = target && (await env.SAVES.getWithMetadata('p:' + target, 'text')); if (!cur || !cur.value) return fail(env, 'Spieler nicht gefunden', 404);
+      const rec = JSON.parse(cur.value); const bk = (await env.SAVES.get('bk:' + target, 'json')) || [];
+      const pick = bk.find((x) => x.t === Number(b.t)); if (!pick) return fail(env, 'Sicherung nicht gefunden', 404);
+      bk.push({ t: Date.now(), data: rec.data }); // aktuellen Stand als Sicherung behalten (Rückgängig möglich)
+      await env.SAVES.put('bk:' + target, JSON.stringify(bk.slice(-(BK_KEEP + 1))), { expirationTtl: 60 * 60 * 24 * 60 });
+      await env.SAVES.put('p:' + target, JSON.stringify({ h: rec.h, data: pick.data, t: Date.now() }), { metadata: cur.metadata || undefined });
+      await env.SAVES.put('rb:' + target, '1', { expirationTtl: 60 * 60 * 24 * 7 });
+      return json(env, { ok: true });
+    }
     case 'banLog': return json(env, { items: (await env.SAVES.get('banlog', 'json')) || [] });
     case 'appealList': {
       const l = await env.SAVES.list({ prefix: 'appeal:', limit: 200 });
@@ -326,7 +403,7 @@ async function admin(env, b) {
     case 'delete': {
       if (!(await needTarget())) return fail(env, 'Spieler nicht gefunden', 404);
       if (admins[target]) return fail(env, 'Admins können nicht gelöscht werden', 403);
-      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:', 'appeal:', 'seen:'].map((p) => env.SAVES.delete(p + target)));
+      await Promise.all(['p:', 'q:', 'ban:', 'mute:', 'f:', 'appeal:', 'seen:', 'bk:', 'sus:', 'rb:'].map((p) => env.SAVES.delete(p + target)));
       return json(env, { ok: true });
     }
     default: return fail(env, 'Unbekannte Aktion');
@@ -395,13 +472,18 @@ export default {
       await ensureDb(rawEnv);
       env = { ...rawEnv, SAVES: new Store(rawEnv.DB) };
 
+      if (url.pathname === '/api/status' && req.method === 'GET') return json(env, { maint: await maintOf(env), season: await currentSeason(env) });
+      if (MAINT_PATHS.has(url.pathname) && (req.method === 'POST' || req.method === 'PUT')) {
+        const m = await maintOf(env);
+        if (m) { let who = null; try { who = (await req.clone().json()).id; } catch { /* egal */ } if (!who || !(await adminMap(env))[who]) return fail(env, 'Wartungsarbeiten – bitte später wieder versuchen.', 503, { maintenance: true, msg: m.msg }); }
+      }
       if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
-        const by = ['score', 'cps', 'asc'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';
-        const key = by === 'score' ? 'sl' : by === 'cps' ? 'cl' : 'asc';
+        const by = ['score', 'cps', 'asc', 'sing'].includes(url.searchParams.get('by')) ? url.searchParams.get('by') : 'score';
+        const key = by === 'score' ? 'sl' : by === 'cps' ? 'cl' : by === 'sing' ? 'sg' : 'asc';
         const ranked = (await listPlayers(env)).filter((p) => !p.banned).sort((x, y) => y[key] - x[key]);
-        const players = ranked.slice(0, 25).map((p) => ({ name: p.name, score: p.score, value: p[by], vl: key === 'asc' ? undefined : p[key] }));
+        const players = ranked.slice(0, 25).map((p) => ({ name: p.name, score: p.score, value: by === 'sing' ? p.sg : p[by], vl: key === 'asc' || key === 'sg' ? undefined : p[key] }));
         const myId = url.searchParams.get('id'); let me = null;
-        if (myId && ID_RE.test(myId)) { const i = ranked.findIndex((p) => p.id === myId); if (i >= 0) me = { rank: i + 1, name: ranked[i].name, value: ranked[i][by], vl: key === 'asc' ? undefined : ranked[i][key] }; }
+        if (myId && ID_RE.test(myId)) { const i = ranked.findIndex((p) => p.id === myId); if (i >= 0) me = { rank: i + 1, name: ranked[i].name, value: by === 'sing' ? ranked[i].sg : ranked[i][by], vl: key === 'asc' || key === 'sg' ? undefined : ranked[i][key] }; }
         return json(env, { players, me, by, total: ranked.length });
       }
 
@@ -487,7 +569,10 @@ export default {
         const score = Number(b.score);
         const s = Number.isFinite(score) && score > 0 ? score : 0;
         const st = b.stats || {}; const c = Number(st.cps), asc = Number(st.asc);
-        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, sl: Number.isFinite(Number(st.sl)) ? Math.min(1e300, Math.max(0, Number(st.sl))) : undefined, cl: Number.isFinite(Number(st.cl)) ? Math.min(1e300, Math.max(0, Number(st.cl))) : undefined, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
+        if (await env.SAVES.get('rb:' + b.id)) return fail(env, 'Spielstand wurde von einem Admin wiederhergestellt', 409, { reload: true });
+        const dd = b.data && typeof b.data === 'object' ? b.data : {}; const sg = Math.max(0, Math.floor(Number(dd.sing)) || 0); const ak = typeof dd.ach === 'string' ? popcount(dd.ach) : 0;
+        if (au.rec) { try { await afterSave(env, b.id, name, au.rec, dd); } catch { /* Sicherung/Prüfung darf nie das Speichern verhindern */ } }
+        await env.SAVES.put('p:' + b.id, JSON.stringify({ h: au.hash, data: b.data, t: Date.now() }), { metadata: { n: name, s, sl: Number.isFinite(Number(st.sl)) ? Math.min(1e300, Math.max(0, Number(st.sl))) : undefined, cl: Number.isFinite(Number(st.cl)) ? Math.min(1e300, Math.max(0, Number(st.cl))) : undefined, g: sg, k: ak, u: Date.now(), c: Number.isFinite(c) && c > 0 ? c : 0, a: Number.isFinite(asc) && asc > 0 ? Math.floor(asc) : 0 } });
         return json(env, { ok: true });
       }
 
@@ -510,7 +595,9 @@ export default {
         const since = Number(b.since) || 0;
         const bc = ((await env.SAVES.get('bc', 'json')) || []).filter((x) => x.t > since);
         const open = ((await env.SAVES.get('polls', 'json')) || []).find(pollOpen); // neueste offene Umfrage (für den Hinweis im Spiel)
-        return json(env, { events: q, broadcasts: bc, now: Date.now(), poll: open ? { id: open.id, q: open.q } : null });
+        const reload = !!(await env.SAVES.get('rb:' + b.id)); if (reload) await env.SAVES.delete('rb:' + b.id);
+        const season = await currentSeason(env);
+        return json(env, { events: q, broadcasts: bc, now: Date.now(), poll: open ? { id: open.id, q: open.q } : null, maint: await maintOf(env), reload, season });
       }
 
       // Chat lesen (ohne Anmeldung möglich)
@@ -530,7 +617,7 @@ export default {
         const mine = [...list].reverse().find((m) => m.u === b.id);
         if (mine && now - mine.t < 2000) return fail(env, 'Nicht so schnell!', 429);
         if (mine && mine.x === text && now - mine.t < 60000) return fail(env, 'Diese Nachricht hast du gerade schon gesendet.', 429);
-        list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, n: meta.n || 'Anonym', u: b.id, a: !!admins[b.id], x: text });
+        list.push({ i: now * 1000 + Math.floor(Math.random() * 1000), t: now, n: meta.n || 'Anonym', u: b.id, a: !!admins[b.id], x: text, k: meta.k || 0 });
         await chatSave(env, list);
         return json(env, { ok: true });
       }

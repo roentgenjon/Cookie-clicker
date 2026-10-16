@@ -241,6 +241,20 @@ export function buildAchievements() {
   [1, 5, 10, 25, 50, 100].forEach((n) => add(`Entdecker ${n}`, `${n} verschiedene neue Gebäude besitzen`, '🧭', (s) => s.newKinds >= n));
   [1, 100, 10000, 1000000].forEach((n) => add(`Baumeister ${n.toLocaleString('de-DE')}`, `${n.toLocaleString('de-DE')} neue Gebäude insgesamt besitzen`, '🏗️', (s) => s.newOwned >= n));
   [25, 50, 100, 250, 500, 1000].forEach((n) => add(`Singularitäts-Meister ${n}`, `Singularität Stufe ${n} erreichen`, '🌀', (s) => s.sing >= n));
+  // Paket 3: 100 weitere Erfolge (216..315)
+  for (let k = 0; k < 15; k++) { const b = BASE_COUNT + k * 7; [10, 100].forEach((n) => add(`${BUILDINGS[b].name}-Kenner ${n}`, `${n}× ${BUILDINGS[b].name} besitzen`, BUILDINGS[b].icon, (s) => s.owned[b] >= n)); }
+  [1e6, 1e9, 1e12, 1e15, 1e20, 1e25, 1e30, 1e35, 1e40, 1e44].forEach((n) => add(`Mega-Gigant ${fmtShort(n)}`, `${fmtShort(n)} Mega-Upgrade-Stufen kaufen`, '♾️', (s) => s.seriesTotal >= n));
+  [2500, 5000, 10000].forEach((n) => add(`Singularitäts-Gott ${n.toLocaleString('de-DE')}`, `Singularität Stufe ${n.toLocaleString('de-DE')} erreichen`, '🌀', (s) => s.sing >= n));
+  [1e33, 1e36, 1e40, 1e45, 1e50, 1e60, 1e80, 1e100, 1e150, 1e200, 1e250, 1e300].forEach((n) => add(`Keks-Gigant ${fmtShort(n)}`, `${fmtShort(n)} Kekse insgesamt gebacken`, '🍪', (s) => s.totalAll >= n));
+  [1e24, 1e27, 1e30, 1e36, 1e42, 1e50, 1e60, 1e80, 1e100, 1e150, 1e200, 1e250].forEach((n) => add(`Turbo-Band ${fmtShort(n)}`, `${fmtShort(n)} Kekse pro Sekunde erreichen`, '⚙️', (s) => s.cps >= n));
+  [2e6, 5e6, 1e7, 1e8].forEach((n) => add(`Klick-Maschine ${fmtShort(n)}`, `${fmtShort(n)}× den großen Keks klicken`, '👆', (s) => s.clicks >= n));
+  [50000, 100000, 200000, 500000].forEach((n) => add(`Gold-Gigant ${n.toLocaleString('de-DE')}`, `${n.toLocaleString('de-DE')} goldene Kekse anklicken`, '🌟', (s) => s.golden >= n));
+  [50, 100, 250, 500].forEach((n) => add(`Ewige Wiedergeburt ${n}`, `${n}× aufsteigen`, '🪽', (s) => s.ascensions >= n));
+  [1e4, 1e5, 1e6, 1e8, 1e10].forEach((n) => add(`Himmelsregen ${fmtShort(n)}`, `${fmtShort(n)} Himmelschips verdient`, '😇', (s) => s.chipsEarned >= n));
+  [75, 90].forEach((n) => add(`Weltenbummler ${n}`, `${n} verschiedene neue Gebäude besitzen`, '🧭', (s) => s.newKinds >= n));
+  [1e8, 1e10, 1e12, 1e15].forEach((n) => add(`Bauherr ${fmtShort(n)}`, `${fmtShort(n)} neue Gebäude insgesamt besitzen`, '🏗️', (s) => s.newOwned >= n));
+  [1, 10, 100, 1000].forEach((n) => add(`Vollständig ${n}`, `Von jedem der 115 Gebäude mindestens ${n} besitzen`, '🏛️', (s) => s.minOwned >= n));
+  [1, 10, 50, 100, 500, 1000].forEach((n) => add(`Zeitreisender ${n}`, `${n} Zeitkristalle ⏳ besitzen`, '⏳', (s) => s.crystals >= n));
   return a;
 }
 

@@ -359,12 +359,12 @@ async function renderCloud() {
   loadLb();
 }
 let lbBy = 'score';
-const LB = { score: 'Gebacken gesamt', cps: 'Kekse pro Sekunde', asc: 'Aufstiege' };
+const LB = { score: 'Gebacken gesamt', cps: 'Kekse pro Sekunde', asc: 'Aufstiege', sing: 'Singularität' };
 async function loadLb(by = lbBy) {
   lbBy = by; const box = $('#lb'); if (!box) return;
   try {
     const r = await cloud.leaderboard(by);
-    const val = (v, vl) => (by === 'asc' ? Math.floor(v).toLocaleString('de-DE') : fmt(Number.isFinite(vl) && vl > 300 ? Big.fromLog(vl) : v));
+    const val = (v, vl) => (by === 'asc' || by === 'sing' ? Math.floor(v).toLocaleString('de-DE') : fmt(Number.isFinite(vl) && vl > 300 ? Big.fromLog(vl) : v));
     const tabs = `<div class="lb-tabs">${Object.entries(LB).map(([k, t]) => `<button data-by="${k}" class="${k === by ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     const rows = r.players.map((p, i) => `<tr class="${cloud.loggedIn && p.name === cloud.name ? 'me' : ''}"><td>${['🥇', '🥈', '🥉'][i] || i + 1}</td><td>${esc(p.name)}</td><td>${val(p.value, p.vl)}</td></tr>`).join('');
     const mine = r.me ? `<div class="note">🎯 Dein Platz: <b>#${r.me.rank}</b> von ${r.total} (${val(r.me.value, r.me.vl)})</div>` : '';
@@ -374,7 +374,7 @@ async function loadLb(by = lbBy) {
 }
 function cloudSave(keepalive = false, setup) {
   if (banned || Date.now() < limitUntil) return Promise.resolve();
-  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
+  return cloud.save(game.serialize(), Math.min(1e300, game.totalReset.add(game.total).toNumber()), keepalive, setup, { cps: Math.min(1e300, game.baseCps.toNumber()), sl: game.totalReset.add(game.total).log10(), cl: game.baseCps.log10(), asc: game.ascensions }).catch((e) => { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); if (e.data && e.data.maintenance) setMaint({ msg: e.data.msg }); if (e.data && e.data.reload) cloudReload(); if (e.data && e.data.limit) { limitUntil = Date.now() + 30 * 60000; toast('⚠️ Cloud-Speicher voll für heute. Dein Fortschritt bleibt auf diesem Gerät gespeichert.'); } throw e; });
 }
 let banned = false; let lastHideSave = 0; let limitUntil = 0;
 // Bann: schwarzer Bildschirm über allem (auch über offenen Fenstern), keine Bedienung, kein Abmelden. Das Merkmal bleibt nach Neuladen erhalten und wird beim Start geprüft.
@@ -434,12 +434,26 @@ function pollHint(poll) {
   $('#pollBadge').textContent = '!';
   if (ls.get('cc_poll_notified') !== poll.id) { ls.set('cc_poll_notified', poll.id); sound.message(); banner({ title: '📊 Neue Umfrage', text: poll.q, icon: '📊', modal: 'polls' }); }
 }
+// Wartungsmodus: Leiste oben; Cloud-Funktionen pausieren, Spielen bleibt möglich
+let maintOn = false;
+function setMaint(mt) {
+  const bar = $('#maintBar'); if (!bar) return;
+  maintOn = !!mt; bar.classList.toggle('hidden', !mt);
+  if (mt) bar.innerHTML = `🛠️ <b>Wartungsarbeiten</b>${mt.msg ? ' – ' + esc(mt.msg) : ''}<br><small>Cloud-Speicherung, Chat und Geschenke pausieren. Du kannst weiterspielen.</small>`;
+}
+// Admin hat einen Spielstand aus einer Sicherung wiederhergestellt: Cloud-Stand laden
+async function cloudReload() {
+  try {
+    const r = await cloud.load();
+    if (r.data) { game.load(r.data); game.name = cloud.name || game.name; $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); toast('♻️ Dein Spielstand wurde von einem Admin wiederhergestellt'); }
+  } catch { /* beim nächsten Mal */ }
+}
 async function pollEvents() {
   if (!cloud.loggedIn || banned) return;
   try {
     const since = Number(ls.get('cc_bc')) || 0;
     const r = await cloud.events(since);
-    ls.set('cc_bc', String(r.now));
+    ls.set('cc_bc', String(r.now)); setMaint(r.maint); if (r.reload) await cloudReload();
     for (const ev of r.events || []) handleEvent(ev, ev.from);
     pollHint(r.poll);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }

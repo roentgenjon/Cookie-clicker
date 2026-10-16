@@ -424,7 +424,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber() };
+    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber(), crystals: this.crystals, minOwned: Math.min(...this.owned) };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
