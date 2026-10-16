@@ -53,3 +53,6 @@ python3 -m http.server 8000   # dann http://localhost:8000
 
 - 🏗️ 115 Gebäude: die ersten 15 klassisch, dazu 100 weitere (Keksplanet … Urknall-Küche). Sie erscheinen im Shop nach und nach (die nächsten 3 nach deinem höchsten Gebäude) und haben je eine Mega-Reihe.
 - 🕳️ Singularität: endlose Stufen (Produktion hoch 1,02 je Stufe) mit 7 Meilenstein-Boni (Stufe 10, 25, 50, 100, 250, 500, 1000).
+
+## Sprache
+In den Optionen gibt es „Sprache / Language“. Die Oberfläche (Menüs, Knöpfe, Fenster, die wichtigsten Hinweise) ist auf Englisch verfügbar. Namen von Gebäuden, Upgrades und Erfolgen sowie Chat-Texte und das Admin-Panel bleiben deutsch.
