@@ -9,6 +9,7 @@ import { sound } from './sound.js';
 import { renderGuild, renderTime, renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
 import { SEASON_NAMES } from './data.js';
+import { i18n } from './i18n.js';
 import { skinById } from './extras.js';
 let megaKey = '';
 
@@ -324,6 +325,7 @@ function renderSettings() {
     <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setMusic">${sound.music ? '🎵 Musik: an' : '🎵 Musik: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button><button id="setBoosts">🔥 Boost-Anzeige: ${showBoosts ? 'an' : 'aus'}</button></div>
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
+    <div class="rowf"><button id="setLang" data-noi18n>🌐 Sprache / Language: ${i18n.lang === 'en' ? 'English' : 'Deutsch'}</button></div>
     <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button></div>
     <details><summary>📲 Als App installieren</summary><p class="note">iPhone/iPad (Safari): Teilen-Symbol → „Zum Home-Bildschirm“. Android/Chrome: Menü → „App installieren“. Dann startet das Spiel wie eine App im Vollbild.</p></details>
     <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
@@ -337,6 +339,7 @@ function renderSettings() {
   $('#setRain').addEventListener('click', () => { rain = !rain; ls.set('cc_rain', rain ? '1' : '0'); renderSettings(); });
   $('#setBoosts').addEventListener('click', () => { showBoosts = !showBoosts; ls.set('cc_boosts', showBoosts ? '1' : '0'); $('#buffs').innerHTML = ''; renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
+  $('#setLang').addEventListener('click', () => { saveLocal(); i18n.set(i18n.lang === 'en' ? 'de' : 'en'); });
   $('#setAuto').addEventListener('click', () => setAuto(!autoBuy));
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
@@ -535,6 +538,7 @@ function frame(now) {
 }
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applySeason();
+i18n.init();
 $('#autoBtn').addEventListener('click', () => setAuto(!autoBuy));
 paintAuto();
 requestAnimationFrame(frame);
