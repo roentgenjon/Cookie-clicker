@@ -8,6 +8,7 @@ import { createChat } from './chat.js';
 import { sound } from './sound.js';
 import { renderTime, renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
+import { SEASON_NAMES } from './data.js';
 import { skinById } from './extras.js';
 let megaKey = '';
 
@@ -116,10 +117,26 @@ function applySkin() {
 }
 applySkin();
 let rain = ls.get('cc_rain') === null ? !matchMedia('(prefers-reduced-motion: reduce)').matches : ls.get('cc_rain') === '1';
+// ---------- Saison-Events (Kalender wie im Server; der Server kann sie per Admin ändern) ----------
+const SEASON_EMO = { halloween: ['🎃', '🦇', '👻'], xmas: ['🎄', '❄️', '🎁'], newyear: ['🎆', '🥂', '✨'], easter: ['🐰', '🥚', '🌷'], summer: ['☀️', '🍦', '🌴'] };
+const localSeason = (d = new Date()) => { const md = (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); return md >= 1024 && md <= 1101 ? 'halloween' : md >= 1215 && md <= 1231 ? 'xmas' : md <= 103 && md >= 101 ? 'newyear' : ''; };
+let seasonSrv; // undefined = Server hat (noch) nichts gesagt
+function applySeason() {
+  const id = seasonSrv !== undefined ? (seasonSrv ? seasonSrv.id : '') : localSeason();
+  const changed = game.setSeason(SEASON_NAMES[id] ? id : '');
+  const tag = $('#seasonTag'); if (tag) { tag.classList.toggle('hidden', !game.season); tag.textContent = game.season ? SEASON_NAMES[game.season] : ''; }
+  document.body.dataset.season = game.season;
+  if (changed && game.season) {
+    lastKey = '';
+    const k = game.season + new Date().toISOString().slice(0, 10);
+    if (ls.get('cc_season_seen') !== k) { ls.set('cc_season_seen', k); banner({ title: `${SEASON_NAMES[game.season]}-Event!`, text: 'Goldene Kekse erscheinen 25 % öfter und es gibt Saison-Erfolge.', icon: SEASON_EMO[game.season][0], modal: 'ach' }); }
+  }
+}
+setInterval(() => { if (seasonSrv === undefined) applySeason(); }, 60000);
 setInterval(() => {
   const host = $('#rain'); if (!rain || document.hidden || host.children.length > 14) return;
   if (Math.random() > Math.min(1, 0.3 + Math.max(0, game.cps.log10()) / 20)) return;
-  const s = document.createElement('span'); s.textContent = skinById(game.skin).emoji;
+  const s = document.createElement('span'); s.textContent = game.season && Math.random() < 0.6 ? SEASON_EMO[game.season][Math.floor(Math.random() * 3)] : skinById(game.skin).emoji;
   s.style.left = Math.random() * 96 + '%'; s.style.fontSize = 14 + Math.random() * 18 + 'px'; s.style.animationDuration = 7 + Math.random() * 7 + 's';
   s.addEventListener('animationend', () => s.remove()); host.append(s);
 }, 700);
@@ -138,7 +155,7 @@ function renderGoldens() {
   for (const [id, el] of goldenEls) if (!alive.has(id)) { el.remove(); goldenEls.delete(id); }
   for (const g of game.gcs) {
     let el = goldenEls.get(g.id);
-    if (!el) { el = document.createElement('button'); el.className = 'golden'; el.dataset.id = g.id; el.textContent = '🌟'; el.setAttribute('aria-label', 'Goldener Keks'); el.style.left = g.x + '%'; el.style.top = g.y + '%'; goldenLayer.append(el); goldenEls.set(g.id, el); sound.goldenSpawn(); }
+    if (!el) { el = document.createElement('button'); el.className = 'golden'; el.dataset.id = g.id; el.textContent = game.season ? SEASON_EMO[game.season][0] : '🌟'; el.setAttribute('aria-label', 'Goldener Keks'); el.style.left = g.x + '%'; el.style.top = g.y + '%'; goldenLayer.append(el); goldenEls.set(g.id, el); sound.goldenSpawn(); }
   }
 }
 
@@ -307,6 +324,7 @@ function renderSettings() {
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button></div>
+    <details><summary>📲 Als App installieren</summary><p class="note">iPhone/iPad (Safari): Teilen-Symbol → „Zum Home-Bildschirm“. Android/Chrome: Menü → „App installieren“. Dann startet das Spiel wie eine App im Vollbild.</p></details>
     <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
   $('#setName').addEventListener('input', (e) => { game.name = e.target.value.trim() || 'Dein'; $('#bakeryName').textContent = game.name; });
@@ -453,7 +471,7 @@ async function pollEvents() {
   try {
     const since = Number(ls.get('cc_bc')) || 0;
     const r = await cloud.events(since);
-    ls.set('cc_bc', String(r.now)); setMaint(r.maint); if (r.reload) await cloudReload();
+    ls.set('cc_bc', String(r.now)); setMaint(r.maint); if (r.season !== undefined) { seasonSrv = r.season; applySeason(); } if (r.reload) await cloudReload();
     for (const ev of r.events || []) handleEvent(ev, ev.from);
     pollHint(r.poll);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
@@ -514,6 +532,8 @@ function frame(now) {
   if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+applySeason();
 $('#autoBtn').addEventListener('click', () => setAuto(!autoBuy));
 paintAuto();
 requestAnimationFrame(frame);

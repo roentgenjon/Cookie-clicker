@@ -1,7 +1,7 @@
 import { SERIES, SERIES_COUNT, SERIES_LEVELS, seriesCost, seriesMaxAffordable, seriesLog } from './mega.js';
 import { Big, ZERO, geoCost, geoMax } from './big.js';
 import { SKINS, skinById, dayKey, yesterdayKey, genTasks, soundDef, soundKind } from './extras.js';
-import { BUILDINGS, BASE_COUNT, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
+import { SEASON_NAMES, BUILDINGS, BASE_COUNT, GROWTH, HEAVEN_START, ORDER_COOKIE, ORDER_HEAVEN, TOTAL_UPGRADES, KIND, COST, P1, P2, NEED, EFFECT, K, LEVEL, buildAchievements } from './data.js';
 
 export const ACH = buildAchievements();
 // Kekse, Produktion und Preise sind Big-Zahlen (ohne Obergrenze). Multiplikatoren werden als log10 gespeichert (Summe statt Produkt).
@@ -69,7 +69,7 @@ export class Game {
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
-    this.crystals = 0; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
+    this.crystals = 0; this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
@@ -160,6 +160,7 @@ export class Game {
   applySingBonuses() {
     const l = this.sing;
     if (l >= 10) this.gFreq = Math.max(0.2, this.gFreq * 0.8);
+    if (this.season) this.gFreq = Math.max(0.2, this.gFreq * 0.75); // Saison-Event: goldene Kekse 25 % öfter
     if (l >= 50) this.gDur *= 1.5;
     if (l >= 100) this.offlineCap += 24 * 3600;
     if (l >= 250) this.gReward *= 2;
@@ -335,6 +336,7 @@ export class Game {
     const i = this.gcs.findIndex((g) => g.id === id);
     if (i < 0) return null;
     const [gc] = this.gcs.splice(i, 1); this.golden++; this.daily.prog.golden++;
+    if (this.season) this.sgold[this.season] = (this.sgold[this.season] || 0) + 1;
     let effect = gc.effect;
     if (!effect) { const r = Math.random(); effect = r < 0.45 ? 'frenzy' : r < 0.72 ? 'lucky' : r < 0.87 ? 'click' : r < 0.93 ? 'jackpot' : r < 0.97 ? 'timewarp' : 'chain'; }
     const rw = this.gReward; const now = Date.now(); let msg;
@@ -410,6 +412,8 @@ export class Game {
     return true;
   }
 
+  setSeason(id) { id = typeof id === 'string' ? id : ''; if (id === this.season) return false; this.season = id; this.recalc(); return true; }
+
   // ---- Zeitkristalle (gibt es beim Aufstieg; werden gegen Sofort-Hilfen getauscht) ----
   buyCrystal(id) {
     const it = CRYSTAL_SHOP.find((c) => c.id === id); if (!it || this.crystals < it.cost) return null;
@@ -424,7 +428,7 @@ export class Game {
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber(), crystals: this.crystals, minOwned: Math.min(...this.owned) };
+    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber(), crystals: this.crystals, sgold: this.sgold, minOwned: Math.min(...this.owned) };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
@@ -435,7 +439,7 @@ export class Game {
   serialize() {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
-      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals,
+      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals, sgold: this.sgold,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
@@ -449,7 +453,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals));
+    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
     this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;

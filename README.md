@@ -16,7 +16,7 @@ Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**
 **Mega-Upgrades:** Zusätzlich gibt es 700 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen, 600 Reihen – Bronze bis Kosmisch – für die 100 neuen Gebäude) mit je ~5·10^44 Stufen,
 die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das rund **3,5·10^47 Upgrades**.
 
-**Neu:** Auto-Kauf (Taste A), Tastenkürzel (Optionen), Freundesliste (⭐), Verlaufs-Diagramm in der Statistik, goldene Keks-Effekte Zeitsprung ⏩ und Kettenreaktion ⛓️, Zeitkristalle ⏳ (beim Aufstieg, gegen Sofort-Hilfen tauschbar).
+**Neu:** Auto-Kauf (Taste A), Tastenkürzel (Optionen), Freundesliste (⭐), Verlaufs-Diagramm in der Statistik, goldene Keks-Effekte Zeitsprung ⏩ und Kettenreaktion ⛓️, Zeitkristalle ⏳ (beim Aufstieg, gegen Sofort-Hilfen tauschbar), 326 Erfolge (mit Abzeichen im Chat), Rangliste nach Singularität, Saison-Events (Halloween, Weihnachten, Neujahr + vom Admin startbar), installierbare App (PWA), Wartungsmodus, Sicherungen und Cheat-Hinweise für Admins.
 Gespeichert wird nur der Fortschritt je Reihe, die Stufen selbst sind Mathematik.
 
 Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden erst bei Bedarf erzeugt),

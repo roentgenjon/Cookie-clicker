@@ -6,11 +6,16 @@
   <title>Keks-Imperium – Cookie Clicker</title>
   <meta name="description" content="Cookie Clicker mit 400.000 Upgrades, Aufstieg, goldenen Keksen, Erfolgen, Cloud-Speicherstand und Rangliste.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍪</text></svg>">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#7b4a1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Keks-Imperium">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="top">
-    <h1><span id="bakeryName">Dein</span> Keks-Imperium</h1>
+    <h1><span id="bakeryName">Dein</span> Keks-Imperium <span id="seasonTag" class="hidden"></span></h1>
     <nav>
       <button data-modal="stats">📊 Statistik</button>
       <button data-modal="ach">🏆 Erfolge <span id="achBadge" class="badge"></span></button>

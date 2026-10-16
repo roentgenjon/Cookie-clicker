@@ -231,3 +231,9 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 #maintBar{position:sticky;top:0;z-index:60;background:var(--bad,#c0392b);color:#fff;padding:8px 16px;text-align:center}
 #maintBar.hidden{display:none}
 .ab{font-size:.72em;background:var(--card2,rgba(128,128,128,.2));border-radius:8px;padding:0 5px;margin-left:4px;white-space:nowrap}
+
+#seasonTag{font-size:.5em;vertical-align:middle;background:linear-gradient(90deg,#ff8c1a,#a64dff);color:#fff;border-radius:10px;padding:2px 8px;margin-left:6px;white-space:nowrap}
+body[data-season=xmas] #seasonTag{background:linear-gradient(90deg,#c0392b,#1e8449)}
+body[data-season=newyear] #seasonTag{background:linear-gradient(90deg,#2c3e90,#d4a017)}
+body[data-season=easter] #seasonTag{background:linear-gradient(90deg,#e58bd2,#7fd36b)}
+body[data-season=summer] #seasonTag{background:linear-gradient(90deg,#f5a623,#2fb4e9)}

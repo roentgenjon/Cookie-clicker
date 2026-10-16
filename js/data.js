@@ -214,6 +214,7 @@ export function upgrade(id) {
 }
 
 // ---- Erfolge ----
+export const SEASON_NAMES = { halloween: 'Halloween 🎃', xmas: 'Weihnachten 🎄', newyear: 'Neujahr 🎆', easter: 'Ostern 🐰', summer: 'Sommerfest ☀️' };
 export function buildAchievements() {
   const a = [];
   const add = (name, desc, icon, test) => a.push({ id: a.length, name, desc, icon, test });
@@ -255,6 +256,8 @@ export function buildAchievements() {
   [1e8, 1e10, 1e12, 1e15].forEach((n) => add(`Bauherr ${fmtShort(n)}`, `${fmtShort(n)} neue Gebäude insgesamt besitzen`, '🏗️', (s) => s.newOwned >= n));
   [1, 10, 100, 1000].forEach((n) => add(`Vollständig ${n}`, `Von jedem der 115 Gebäude mindestens ${n} besitzen`, '🏛️', (s) => s.minOwned >= n));
   [1, 10, 50, 100, 500, 1000].forEach((n) => add(`Zeitreisender ${n}`, `${n} Zeitkristalle ⏳ besitzen`, '⏳', (s) => s.crystals >= n));
+  // Saison-Erfolge (nur während des jeweiligen Events erspielbar)
+  for (const [id, nm] of Object.entries(SEASON_NAMES)) [13, 77].forEach((n) => add(`${nm.split(' ')[0]}-Jäger ${n}`, `${n} goldene Kekse während des ${nm}-Events anklicken`, nm.split(' ')[1], (s) => (s.sgold[id] || 0) >= n));
   return a;
 }
 
