@@ -6,7 +6,7 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderTime, renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
+import { renderGuild, renderTime, renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
 import { SEASON_NAMES } from './data.js';
 import { skinById } from './extras.js';
@@ -310,6 +310,7 @@ function renderModal() {
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
   else if (modalKind === 'polls') renderPolls($('#modalBody'), { toast, title: (t) => { $('#modalTitle').textContent = t; }, onSeen: (id) => { ls.set('cc_poll_seen', id); $('#pollBadge').textContent = ''; } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
+  else if (modalKind === 'guild') renderGuild($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
   else if (modalKind === 'time') renderTime($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
   else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
   else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
