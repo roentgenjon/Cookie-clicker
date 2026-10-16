@@ -221,3 +221,15 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const h2 = new Game(); const id2 = h2.spawnGolden('chain').id; h2.clickGolden(id2); assert.equal(h2.gcs.length, 3, 'Kettenreaktion ruft 3 Kekse');
   console.log('Zeitkristall-Test OK');
 }
+
+// ---- Saison-Events ----
+{
+  const g = new Game(); g.owned[0] = 10; g.recalc(); const f0 = g.gFreq;
+  assert.equal(g.setSeason('halloween'), true); assert.ok(g.gFreq < f0, 'Saison: goldene Kekse öfter'); assert.equal(g.setSeason('halloween'), false);
+  const id = g.spawnGolden('lucky').id; g.clickGolden(id); assert.equal(g.sgold.halloween, 1);
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.sgold.halloween, 1, 'Speichern/Laden');
+  g.setSeason(''); assert.equal(g.gFreq, f0, 'Saison-Ende stellt Frequenz zurück');
+  for (let k = 0; k < 13; k++) { g.setSeason('halloween'); g.clickGolden(g.spawnGolden('lucky').id); } g.checkAchievements();
+  assert.ok(ACH.some((a) => a.name === 'Halloween-Jäger 13' && g.ach[a.id]), 'Saison-Erfolg');
+  console.log('Saison-Test OK');
+}
