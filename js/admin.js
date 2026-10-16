@@ -27,8 +27,8 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot'], ['timewarp', '⏩ Zeitsprung'], ['chain', '⛓️ Kettenreaktion']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
-const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog'];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
+const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog', 'maint', 'sus'];
 const LOG_TAB = ['adminlog', '🧾 Admin-Protokoll']; // nur für Entity_2806 (der Server prüft das ebenfalls)
 // Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
 export function parseDur(txt) {
@@ -54,7 +54,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
   let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
-  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -99,6 +99,9 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
+  async function loadMaint() { try { const [m, s] = await Promise.all([cloud.admin('maintGet'), cloud.admin('seasonGet')]); maintData = { maint: m.maint, season: s.season, seasons: s.seasons }; } catch (e) { maintData = { error: e.message }; } }
+  async function loadSus() { try { susItems = (await cloud.admin('susList')).items; } catch { susItems = []; } }
+  async function loadBk() { bkItems = null; if (!sel || sel === ALL) return; try { bkItems = (await cloud.admin('backupList', { target: sel })).items; } catch (e) { bkItems = { error: e.message }; } }
   async function loadAdmins() { try { adminData = await cloud.admin('adminList'); } catch (e) { adminData = { error: e.message }; } }
   const online = (p) => !!p.online;
   const ago = (t) => new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -156,7 +159,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         ${rows.length ? rows.map((x) => `<div class="adm-sched"><span>${ago(x.t)}</span><span><b>${esc(x.by)}</b>${x.to ? ` → <b>${esc(x.to)}</b>` : ''}<br><small>${esc(x.d)}</small></span><span></span></div>`).join('') : '<div class="adm-hint">Keine Einträge.</div>'}`;
       }
       case 'polls': {
-        const list = pollItems === null ? '<div class="adm-empty">Lade…</div>' : pollItems.length ? pollItems.map((p) => `<div class="adm-sec"><h4>${p.open ? '🟢' : '⚪'} ${esc(p.q)} <small>${p.total} Stimmen</small></h4>${p.opts.map((o, i) => `<div class="adm-sched"><span>${esc(o)}</span><span>${p.total ? Math.round((p.counts[i] / p.total) * 100) : 0} % (${p.counts[i]})</span><span></span></div>`).join('')}<div class="adm-btns wrap"><button data-act="pollClose" data-id="${p.id}">${p.open ? '🔒 Beenden' : '🔓 Wieder öffnen'}</button><button class="danger" data-act="pollDel" data-id="${p.id}">🗑️ Löschen</button></div></div>`).join('') : '<div class="adm-hint">Noch keine Umfragen.</div>';
+        const list = pollItems === null ? '<div class="adm-empty">Lade…</div>' : pollItems.length ? pollItems.map((p) => `<div class="adm-sec"><h4>${p.open ? '🟢' : '⚪'} ${esc(p.q)} <small>${p.total} Stimmen</small></h4>${p.opts.map((o, i) => `<div class="adm-sched"><span>${esc(o)}</span><span>${p.total ? Math.round((p.counts[i] / p.total) * 100) : 0} % (${p.counts[i]})</span><span></span></div>`).join('')}<div class="adm-btns wrap"><button data-act="pollClose" data-id="${p.id}">${p.open ? '🔒 Beenden' : '🔓 Wieder öffnen'}</button><button data-act="pollShare" data-id="${p.id}" title="Ergebnis als Nachricht im Allgemein-Chat posten">💬 Im Chat teilen</button><button class="danger" data-act="pollDel" data-id="${p.id}">🗑️ Löschen</button></div></div>`).join('') : '<div class="adm-hint">Noch keine Umfragen.</div>';
         return `<div class="adm-hint">Erstellt eine Umfrage für <b>alle Spieler</b>. Sie bekommen einen Hinweis und stimmen im Fenster „📊 Umfragen“ ab. Es bleiben die letzten 20 Umfragen gespeichert.</div>
         ${fld('Frage', '<input type="text" id="pq" maxlength="140" placeholder="z. B. Welches Update wollt ihr als Nächstes?">')}
         ${fld('Antworten (eine pro Zeile, 2 bis 6)', '<textarea id="po" rows="4" maxlength="400" placeholder="Auto-Kauf&#10;Gilden&#10;Neue goldene Kekse"></textarea>')}
@@ -177,6 +180,28 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!appealItems) return '<div class="adm-empty">Lade…</div>';
         if (!appealItems.length) return '<div class="adm-hint">Keine Einsprüche.</div>';
         return `<div class="adm-hint">Einsprüche gesperrter Spieler. Antworten sehen sie auf ihrem schwarzen Bildschirm.</div>${appealItems.map((x) => `<div class="adm-sec"><h4>${x.o ? '📨' : '✅'} ${esc(x.n || x.id)} <small>${ago(x.t)}</small></h4><div class="note">„${esc(x.x || '')}“</div>${x.r ? `<div class="note"><b>Deine Antwort:</b> ${esc(x.r)}</div>` : ''}<div class="adm-grid">${fld('Antwort', `<input type="text" id="ar_${x.id}" maxlength="300" placeholder="Antwort an den Spieler" value="${esc(x.r || '')}">`)}<div class="adm-btns wrap"><button data-act="apReply" data-id="${x.id}">💬 Antworten</button><button data-act="apUnban" data-id="${x.id}">✅ Entbannen</button><button class="danger" data-act="apDel" data-id="${x.id}">🗑️</button></div></div></div>`).join('')}`;
+      }
+      case 'maint': {
+        if (!maintData) return '<div class="adm-empty">Lade…</div>';
+        if (maintData.error) return `<div class="adm-hint">${esc(maintData.error)}</div>`;
+        const m = maintData.maint; const se = maintData.season;
+        return `<div class="adm-sec"><h4>🛠️ Wartungsmodus ${m && m.on ? '🔴 AN' : '⚪ aus'}</h4><div class="adm-hint">Solange er an ist, sehen alle Spieler eine Leiste und die Cloud (Speichern, Chat, Geschenke, Umfragen) pausiert. Admins sind ausgenommen. Spielen geht weiter.</div>
+          ${fld('Hinweis', `<input type="text" id="mMsg" maxlength="140" placeholder="z. B. Update dauert ca. 10 Minuten" value="${esc((m && m.msg) || '')}">`)}
+          <div class="adm-btns wrap"><button data-act="maintSet" data-on="1">🔴 Einschalten</button><button data-act="maintSet" data-on="0">⚪ Ausschalten</button></div></div>
+        <div class="adm-sec"><h4>🎉 Saison-Event: ${se ? esc(se.name) + (se.auto ? ' (automatisch)' : ' (Admin)') : 'keins'}</h4><div class="adm-hint">Halloween (24.10.–1.11.), Weihnachten (15.–31.12.) und Neujahr (1.–3.1.) laufen automatisch. Hier kannst du ein Event von Hand starten.</div>
+          <div class="adm-grid">${fld('Event', `<select id="sSeason">${Object.entries(maintData.seasons).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('')}</select>`)}${fld('Dauer (Stunden)', '<input type="number" id="sHours" min="1" max="1440" value="24">')}</div>
+          <div class="adm-btns wrap"><button data-act="seasonSet">▶️ Starten</button><button data-act="seasonOff">⏹️ Admin-Event beenden</button></div></div>`;
+      }
+      case 'sus': {
+        if (!susItems) return '<div class="adm-empty">Lade…</div>';
+        if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
+        return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
+      }
+      case 'bk': {
+        if (all) return '<div class="adm-hint">Sicherungen gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
+        if (!bkItems) return '<div class="adm-empty">Lade…</div>';
+        if (bkItems.error) return `<div class="adm-hint">${esc(bkItems.error)}</div>`;
+        return `<div class="adm-hint">Der Server legt beim Speichern alle 8 Stunden automatisch eine Sicherung an (die letzten 3). Beim Wiederherstellen wird der aktuelle Stand ebenfalls gesichert.</div>${bkItems.length ? bkItems.map((x) => `<div class="adm-sched"><span>${ago(x.t)}</span><span>Kekse ${esc(String(x.cookies || '0'))} · Aufstiege ${x.ascensions} · Singularität ${x.sing} · Erfolge ${x.ach}</span><button data-act="bkRestore" data-t="${x.t}">♻️ Wiederherstellen</button></div>`).join('') : '<div class="adm-hint">Noch keine Sicherung.</div>'}<button data-act="bkReload">🔄 Neu laden</button>`;
       }
       case 'admins': {
         if (!adminData) return '<div class="adm-empty">Lade…</div>';
@@ -231,9 +256,9 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   const intIn = (s, min, max, def) => { const n = Math.floor(Number(val(s))); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
   root.addEventListener('click', async (e) => {
     const row = e.target.closest('.adm-row[data-id]');
-    if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; return paint(); }
+    if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; if (tab === 'bk') { loadBk().then(paint); } return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } if (tab === 'maint') { await loadMaint(); paint(); } if (tab === 'sus') { await loadSus(); paint(); } if (tab === 'bk') { await loadBk(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -325,6 +350,14 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'pollDel': { if (!confirm('Diese Umfrage samt Stimmen löschen?')) return; try { await call('pollDel', { poll: btn.dataset.id }); say('Umfrage gelöscht'); await loadPolls(); } catch { return; } return paint(); }
       case 'apReply': { const id = btn.dataset.id; const text = (root.querySelector('#ar_' + id) || {}).value || ''; try { await call('appealReply', { target: id, text }); say('Antwort gesendet'); await loadAppeals(); } catch { return; } return paint(); }
       case 'apUnban': { const id = btn.dataset.id; try { await call('ban', { target: id, banned: false }); say('Entbannt'); await loadAppeals(); await refresh(); } catch { return; } return paint(); }
+      case 'pollShare': { try { await call('pollShare', { poll: btn.dataset.id }); say('Ergebnis im Chat gepostet'); } catch { return; } return paint(); }
+      case 'maintSet': { const on = btn.dataset.on === '1'; try { await call('maintSet', { on, msg: val('#mMsg') }); say(on ? 'Wartungsmodus an' : 'Wartungsmodus aus'); await loadMaint(); } catch { return; } return paint(); }
+      case 'seasonSet': { try { await call('seasonSet', { season: val('#sSeason'), hours: intIn('#sHours', 1, 1440, 24) }); say('Event gestartet'); await loadMaint(); } catch { return; } return paint(); }
+      case 'seasonOff': { try { await call('seasonSet', { season: '' }); say('Admin-Event beendet'); await loadMaint(); } catch { return; } return paint(); }
+      case 'susDel': { try { await call('susDel', { target: btn.dataset.id }); say('Erledigt'); await loadSus(); } catch { return; } return paint(); }
+      case 'susBan': { if (!confirm('Diesen Spieler wirklich sperren?')) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
+      case 'bkReload': { await loadBk(); return paint(); }
+      case 'bkRestore': { if (!confirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).')) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
         const p = players.find((x) => x.id === sel); const reason = (root.querySelector('#banMsg') || {}).value || '';

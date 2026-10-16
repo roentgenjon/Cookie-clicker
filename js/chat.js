@@ -39,7 +39,7 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
     const el = document.createElement('div'); const g = active === 'global';
     const mine = g ? mineGlobal(m) : m.f === myId();
     el.className = 'cm' + (mine ? ' me' : ''); el.dataset.mid = m.i;
-    const who = g ? `<b class="${m.a ? 'adm' : ''}" data-n="${esc(String(m.n).toLowerCase())}"><i class="od ${isOn(m.n) ? 'on' : ''}"></i>${m.a ? '🛡️ ' : ''}${esc(m.n)}</b>` : `<b>${mine ? 'Du' : esc((convs.find((c) => c.id === active) || {}).name || '?')}</b>`;
+    const who = g ? `<b class="${m.a ? 'adm' : ''}" data-n="${esc(String(m.n).toLowerCase())}"><i class="od ${isOn(m.n) ? 'on' : ''}"></i>${m.a ? '🛡️ ' : ''}${esc(m.n)}</b>${m.k ? ` <span class="ab" title="${m.k} Erfolge">${m.k >= 300 ? '💎' : m.k >= 200 ? '🥇' : m.k >= 100 ? '🥈' : '🥉'}${m.k}</span>` : ''}` : `<b>${mine ? 'Du' : esc((convs.find((c) => c.id === active) || {}).name || '?')}</b>`;
     el.innerHTML = `<div class="cm-h">${who}<span>${time(m.t)}</span>${g && isAdmin() ? `<button class="cm-del" data-mid="${m.i}" title="Nachricht löschen">🗑️</button>` : ''}</div><div class="cm-t">${esc(m.x)}</div>`;
     return el;
   }

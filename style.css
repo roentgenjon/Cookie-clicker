@@ -227,3 +227,7 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 .hist-svg .hx{stroke:var(--mute);stroke-width:1;stroke-dasharray:3 3}.hist-svg .hd{fill:var(--accent);stroke:var(--panel);stroke-width:2}
 .hist-tip{position:absolute;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 14px #0006}
 .hist-tab{margin-top:6px;font-size:13px}.hist-tab table{width:100%;border-collapse:collapse;margin-top:6px}.hist-tab td,.hist-tab th{text-align:left;padding:3px 6px;border-bottom:1px solid var(--line)}
+
+#maintBar{position:sticky;top:0;z-index:60;background:var(--bad,#c0392b);color:#fff;padding:8px 16px;text-align:center}
+#maintBar.hidden{display:none}
+.ab{font-size:.72em;background:var(--card2,rgba(128,128,128,.2));border-radius:8px;padding:0 5px;margin-left:4px;white-space:nowrap}
