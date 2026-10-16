@@ -49,6 +49,13 @@ function unpackBits(str, len) {
   return rawUnpack(str.startsWith('b:') ? str.slice(2) : str, len);
 }
 
+export const CRYSTAL_SHOP = [
+  { id: 'warp1', icon: '⏩', name: 'Zeitsprung: 1 Stunde Produktion', cost: 3 },
+  { id: 'warp24', icon: '⏭️', name: 'Großer Zeitsprung: 24 Stunden Produktion', cost: 25 },
+  { id: 'golden', icon: '🌟', name: '3 goldene Kekse rufen', cost: 2 },
+  { id: 'frenzy', icon: '🔥', name: 'Raserei (77 s)', cost: 2 },
+  { id: 'click', icon: '👆', name: 'Klick-Raserei ×777 (13 s)', cost: 2 },
+];
 export class Game {
   constructor() {
     this.name = 'Dein';
@@ -62,7 +69,7 @@ export class Game {
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
-    this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
+    this.crystals = 0; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
@@ -317,7 +324,7 @@ export class Game {
     }
   }
 
-  // effect: null = zufällig, sonst 'frenzy'|'lucky'|'click'|'jackpot'
+  // effect: null = zufällig, sonst 'frenzy'|'lucky'|'click'|'jackpot'|'timewarp'|'chain'
   spawnGolden(effect = null) {
     const g = { id: ++this.gid, until: Date.now() + 13000 * this.gDur, x: 6 + Math.random() * 84, y: 8 + Math.random() * 74, effect };
     this.gcs.push(g);
@@ -329,7 +336,7 @@ export class Game {
     if (i < 0) return null;
     const [gc] = this.gcs.splice(i, 1); this.golden++; this.daily.prog.golden++;
     let effect = gc.effect;
-    if (!effect) { const r = Math.random(); effect = r < 0.5 ? 'frenzy' : r < 0.8 ? 'lucky' : r < 0.95 ? 'click' : 'jackpot'; }
+    if (!effect) { const r = Math.random(); effect = r < 0.45 ? 'frenzy' : r < 0.72 ? 'lucky' : r < 0.87 ? 'click' : r < 0.93 ? 'jackpot' : r < 0.97 ? 'timewarp' : 'chain'; }
     const rw = this.gReward; const now = Date.now(); let msg;
     if (effect === 'frenzy') {
       const mult = this.gFrenzy; const s = 77 * this.gDur;
@@ -342,6 +349,11 @@ export class Game {
       const s = 13 * this.gDur;
       this.buffs.push({ type: 'click', mult: 777, until: now + s * 1000 });
       msg = { kind: 'click', text: `Klick-Raserei! Klicks ×777 für ${Math.round(s)} s` };
+    } else if (effect === 'timewarp') {
+      const g = this.baseCps.mulN(3600 * rw).add(13); this.earn(g); msg = { kind: 'timewarp', text: '⏩ Zeitsprung! 1 Stunde Produktion auf einmal', gain: g };
+    } else if (effect === 'chain') {
+      let n = 0; for (let k = 0; k < 3 && this.gcs.length < 40; k++) { this.spawnGolden(null); n++; }
+      msg = { kind: 'chain', text: `⛓️ Kettenreaktion! ${n} weitere goldene Kekse erscheinen` };
     } else {
       const g = this.baseCps.mulN(600 * rw).add(13); this.earn(g); msg = { kind: 'jackpot', text: 'Jackpot!', gain: g };
     }
@@ -389,13 +401,24 @@ export class Game {
   ascend() {
     const gain = this.chipsGain;
     if (gain.lt(1)) return false;
-    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++;
+    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++; this.crystals += 1 + Math.max(0, Math.floor(gain.log10()));
     this.cookies = ZERO; this.total = ZERO;
     this.owned.fill(0);
     this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);
     this.buffs = []; this.gcs = []; this.nextGolden = 60;
     this.recalc();
     return true;
+  }
+
+  // ---- Zeitkristalle (gibt es beim Aufstieg; werden gegen Sofort-Hilfen getauscht) ----
+  buyCrystal(id) {
+    const it = CRYSTAL_SHOP.find((c) => c.id === id); if (!it || this.crystals < it.cost) return null;
+    this.crystals -= it.cost; const now = Date.now(); const rw = this.gReward; let msg;
+    if (id === 'warp1' || id === 'warp24') { const g = this.baseCps.mulN((id === 'warp1' ? 3600 : 86400) * rw).add(13); this.earn(g); msg = { text: `⏩ ${it.name}`, gain: g }; }
+    else if (id === 'golden') { for (let k = 0; k < 3; k++) this.spawnGolden(null); msg = { text: '🌟 3 goldene Kekse erscheinen' }; }
+    else if (id === 'frenzy') { this.buffs.push({ type: 'frenzy', mult: this.gFrenzy, until: now + 77000 * this.gDur }); msg = { text: '🔥 Raserei aktiv' }; }
+    else { this.buffs.push({ type: 'click', mult: 777, until: now + 13000 * this.gDur }); msg = { text: '👆 Klick-Raserei aktiv' }; }
+    return msg;
   }
 
   // ---- Erfolge ----
@@ -412,7 +435,7 @@ export class Game {
   serialize() {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
-      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions,
+      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
@@ -426,7 +449,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.sing = Math.floor(num(d.sing));
+    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals));
     this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;

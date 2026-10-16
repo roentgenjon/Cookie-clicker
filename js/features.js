@@ -1,7 +1,7 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
 import { SKINS, TASK_INFO, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
-import { SING_MILESTONES } from './engine.js';
+import { SING_MILESTONES, CRYSTAL_SHOP } from './engine.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, fmtUp, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseBig } from './admin.js';
 import { Big } from './big.js';
@@ -140,4 +140,20 @@ export async function renderPolls(body, { title, toast, onSeen }) {
     }));
   };
   load();
+}
+
+
+// ---------- Zeitkristalle ----------
+export function renderTime(body, { game, fmt, toast, title }) {
+  title('⏳ Zeitkristalle');
+  const paint = () => {
+    body.innerHTML = `<div class="shop-top"><div><b>⏳ ${game.crystals.toLocaleString('de-DE')} Zeitkristalle</b><div class="note">Du bekommst sie bei jedem Aufstieg (1 + eine Stelle je 10× so vielen Himmelschips).</div></div></div>
+      <div class="stack">${CRYSTAL_SHOP.map((c) => `<div class="adm-sched"><span>${c.icon}</span><span>${c.name}</span><button data-id="${c.id}" ${game.crystals >= c.cost ? '' : 'disabled'}>⏳ ${c.cost}</button></div>`).join('')}</div>`;
+  };
+  paint();
+  body.onclick = (e) => {
+    const b = e.target.closest('button[data-id]'); if (!b) return;
+    const m = game.buyCrystal(b.dataset.id); if (!m) return;
+    toast(`⏳ <b>${m.text}</b>${m.gain ? ` +${fmt(m.gain)} Kekse` : ''}`); paint();
+  };
 }

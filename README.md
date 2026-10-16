@@ -3,7 +3,7 @@
 Cookie Clicker mit **400.000 Upgrades**, 15 Gebäuden, goldenen Keksen, 184 Erfolgen, Aufstieg (Himmelschips),
 Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**, Datenbank auf **Cloudflare (Worker + KV)**.
 
-## Upgrades (genau 10^47)
+## Upgrades (ca. 3,5·10^47)
 | Art | Anzahl |
 |---|---|
 | Gebäude-Stufen (7.600 je Gebäude) | 114.000 |
@@ -13,8 +13,10 @@ Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**
 | Goldene Kekse | 34.000 |
 | Himmlische Upgrades (kosten Chips, bleiben nach Aufstieg) | 50.000 |
 
-**Mega-Upgrades:** Zusätzlich gibt es 200 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen, 100 Reihen für die neuen Gebäude) mit je ~5·10^44 Stufen,
-die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das genau **10^47 Upgrades** (eine 1 mit 47 Nullen).
+**Mega-Upgrades:** Zusätzlich gibt es 700 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen, 600 Reihen – Bronze bis Kosmisch – für die 100 neuen Gebäude) mit je ~5·10^44 Stufen,
+die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das rund **3,5·10^47 Upgrades**.
+
+**Neu:** Auto-Kauf (Taste A), Tastenkürzel (Optionen), Freundesliste (⭐), Verlaufs-Diagramm in der Statistik, goldene Keks-Effekte Zeitsprung ⏩ und Kettenreaktion ⛓️, Zeitkristalle ⏳ (beim Aufstieg, gegen Sofort-Hilfen tauschbar).
 Gespeichert wird nur der Fortschritt je Reihe, die Stufen selbst sind Mathematik.
 
 Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden erst bei Bedarf erzeugt),

@@ -1,14 +1,14 @@
-// Mega-Upgrades: 200 unendlich-artige Reihen. Jede Reihe hat ~5·10^44 Stufen (einzeln nacheinander kaufbar).
-// Zusammen mit den 400.000 normalen Upgrades ergibt das genau 10^47 Upgrades (1 mit 47 Nullen).
-// Die Stufen werden nicht gespeichert, sondern nur der Fortschritt je Reihe (200 Zahlen) – alles andere ist Mathematik.
+// Mega-Upgrades: 700 unendlich-artige Reihen. Jede Reihe hat ~5·10^44 Stufen (einzeln nacheinander kaufbar).
+// Zusammen mit den 400.000 normalen Upgrades ergibt das ca. 3,5·10^47 Upgrades.
+// Die Stufen werden nicht gespeichert, sondern nur der Fortschritt je Reihe (700 Zahlen) – alles andere ist Mathematik.
 import { BUILDINGS, BASE_COUNT, TOTAL_UPGRADES } from './data.js';
 import { Big, geoCost, geoMax, fmtBig } from './big.js';
 
-export const SERIES_COUNT = 200; // 90 Reihen für die ersten 15 Gebäude, 10 Klick/Global, 100 für die neuen Gebäude
-export const TOTAL_TARGET = 10n ** 47n; // gewünschte Gesamtzahl (10^22 × so viele wie zuvor: 10^25)
-const LEVELS_BIG = (TOTAL_TARGET - BigInt(TOTAL_UPGRADES)) / BigInt(SERIES_COUNT); // 5·10^44 − 2.000 Stufen je Reihe (exakt als BigInt)
+export const SERIES_COUNT = 700; // 90 Reihen für die ersten 15 Gebäude, 10 Klick/Global, 100 Bronze-Reihen + 500 Silber…Kosmisch für die neuen Gebäude
+export const TOTAL_TARGET = 10n ** 47n; // Stufenbasis: je Reihe (10^47 − 400.000) / 200 Stufen, bleibt gleich, auch wenn neue Reihen dazukommen
+const LEVELS_BIG = (TOTAL_TARGET - BigInt(TOTAL_UPGRADES)) / 200n; // 5·10^44 − 2.000 Stufen je Reihe (exakt als BigInt)
 export const SERIES_LEVELS = Number(LEVELS_BIG); // für die Rechnung als Zahl (über 2^53 nur noch auf ~16 Stellen genau)
-export const TOTAL_ALL = BigInt(TOTAL_UPGRADES) + LEVELS_BIG * BigInt(SERIES_COUNT); // exakt 10^47
+export const TOTAL_ALL = BigInt(TOTAL_UPGRADES) + LEVELS_BIG * BigInt(SERIES_COUNT); // ca. 3,5·10^47
 export const TOTAL_ALL_TEXT = fmtBig(Number(TOTAL_ALL)); // „1,00e47“
 // Anzahl von Upgrades/Stufen anzeigen: bis 1e15 ausgeschrieben, darüber gekürzt (große Zahlen sind als Double nicht mehr ganzzahlig genau)
 export const fmtUp = (n) => (n < 1e15 ? Math.floor(n).toLocaleString('de-DE') : fmtBig(n));
@@ -33,6 +33,8 @@ for (let i = 0; i < 5; i++) SERIES.push({ kind: 'click', name: `Daumen-Training 
 for (let i = 0; i < 5; i++) SERIES.push({ kind: 'global', name: `Backstuben-Reform ${ROMAN[i]}`, icon: '📜', badge: '🏛️', baked: BAKED[i], base: [5e3, 5e7, 5e12, 5e18, 5e25][i], g: 1.02, e: 0.0015 });
 // Neue Gebäude: je eine Mega-Reihe (hinten angehängt, damit gespeicherte Stufen ihre Nummern behalten)
 for (let b = BASE_COUNT; b < BUILDINGS.length; b++) SERIES.push({ kind: 'bld', b, tier: 0, name: `Mega-${BUILDINGS[b].name}`, icon: BUILDINGS[b].icon, badge: '🏗️', need: 10, base: BUILDINGS[b].base * 200, g: 1.02, e: 0.002 });
+// Silber bis Kosmisch für die neuen Gebäude (hinten angehängt, Nummern 200..699)
+for (let t = 1; t < TIERS.length; t++) for (let b = BASE_COUNT; b < BUILDINGS.length; b++) SERIES.push({ kind: 'bld', b, tier: t, name: `${TIERS[t].name}-${BUILDINGS[b].name}`, icon: BUILDINGS[b].icon, badge: TIERS[t].icon, need: TIERS[t].need, base: BUILDINGS[b].base * 200 * TIERS[t].mult, g: TIERS[t].g, e: TIERS[t].e });
 
 export const seriesDesc = (s) => (s.kind === 'bld' ? `${s.name}: Produktion +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe` : s.kind === 'click' ? `Klickstärke +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe` : `Gesamte Produktion +${(s.e * 100).toFixed(2).replace('.', ',')} % je Stufe`);
 export const seriesNeedText = (s) => (s.kind === 'bld' ? `${s.need} × ${BUILDINGS[s.b].name} besitzen` : `${s.baked.toExponential(0).replace('e+', 'e')} Kekse insgesamt gebacken`);

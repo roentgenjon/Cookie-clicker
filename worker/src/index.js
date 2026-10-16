@@ -82,7 +82,7 @@ const num = (v, min, max) => { v = Number(v); return Number.isFinite(v) ? Math.m
 function cleanEvent(e) {
   if (!e || typeof e !== 'object') return null;
   switch (e.type) {
-    case 'golden': { const count = num(e.count, 1, 30); return ['random', 'frenzy', 'lucky', 'click', 'jackpot'].includes(e.effect) && count ? { type: 'golden', effect: e.effect, count: Math.floor(count) } : null; }
+    case 'golden': { const count = num(e.count, 1, 30); return ['random', 'frenzy', 'lucky', 'click', 'jackpot', 'timewarp', 'chain'].includes(e.effect) && count ? { type: 'golden', effect: e.effect, count: Math.floor(count) } : null; }
     case 'cookies': { // Menge als Zahl oder als Text wie "-1.5e+500" (Spiel ohne Obergrenze)
       if (typeof e.amount === 'string') { const t = /^\s*(-?)(\d+(?:\.\d+)?)(?:e([+-]?\d+))?\s*$/i.exec(e.amount); if (!t) return null; const ex = t[3] ? Number(t[3]) : 0; if (!(Number(t[2]) > 0) || ex > 1e300 || ex < -5) return null; return { type: 'cookies', amount: `${t[1]}${t[2]}e${t[3] ? t[3].replace(/^\+/, '') : '0'}` }; }
       const amount = num(e.amount, -1e300, 1e300); return amount === null ? null : { type: 'cookies', amount };

@@ -24,7 +24,7 @@ export function parseNum(txt) {
   return mult ? base * mult : NaN;
 }
 
-const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot']];
+const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot'], ['timewarp', '⏩ Zeitsprung'], ['chain', '⛓️ Kettenreaktion']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
 const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['manage', '⚙️ Verwaltung']];
