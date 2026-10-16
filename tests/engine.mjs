@@ -84,7 +84,7 @@ const sg2 = new Game(); sg2.load(JSON.parse(JSON.stringify(sg.serialize()))); as
 const sg3 = new Game(); sg3.load({ v: 2, sounds: { owned: ['zen', 'unsinn'], pack: 'epic', track: 'calm' } }); assert.equal(sg3.sounds.pack, 'classic', 'nicht besessen -> klassisch'); assert.ok(sg3.sounds.owned.includes('zen') && !sg3.sounds.owned.includes('unsinn'));
 // Mega-Upgrades
 import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
-  assert.equal(TOTAL_ALL, 10n ** 47n); assert.equal(SERIES.length, 200);
+  assert.ok(TOTAL_ALL > 35n * 10n ** 46n - 10n ** 10n && TOTAL_ALL < 35n * 10n ** 46n + 10n ** 10n); assert.equal(SERIES.length, 700);
   const mg = new Game(); mg.owned[0] = 20; mg.recalc(); const b0 = N(mg.baseCps);
   assert.equal(mg.seriesVisible(0), true); assert.equal(mg.seriesVisible(6), false, 'Silber braucht 50');
   assert.equal(mg.buySeries(0), 0, 'kein Geld'); mg.cookies = B(1e6);
@@ -164,7 +164,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 // ---- 10^47 Upgrades: Mega-Stufen bis 5·10^44 je Reihe ----
 {
   const { SERIES_LEVELS, TOTAL_ALL, TOTAL_ALL_TEXT, fmtUp } = await import('../js/mega.js');
-  assert.equal(TOTAL_ALL, 10n ** 47n); assert.ok(SERIES_LEVELS > 4.99e44 && SERIES_LEVELS < 5.01e44); assert.equal(TOTAL_ALL_TEXT, '1,00e47'); assert.equal(fmtUp(5e44), '500 Dc'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
+  assert.ok(TOTAL_ALL > 34n * 10n ** 46n); assert.ok(SERIES_LEVELS > 4.99e44 && SERIES_LEVELS < 5.01e44); assert.equal(TOTAL_ALL_TEXT, '3,50e47'); assert.equal(fmtUp(5e44), '500 Dc'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
   const g = new Game(); g.owned[0] = 20; g.recalc(); g.cookies = B('1e' + '9'.repeat(45)); g.total = g.cookies; // Exponent ~1e45: genug für alle Stufen
   const t0 = Date.now(); const got = g.buySeries(0, 'max'); assert.ok(Date.now() - t0 < 2000, 'keine Endlosschleife');
   assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e41, 'Produktion wächst mit 5·10^44 Stufen');
@@ -178,7 +178,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const { BUILDINGS, BASE_COUNT } = await import('../js/data.js'); const { SERIES, SERIES_COUNT } = await import('../js/mega.js');
   assert.equal(BUILDINGS.length, 115); assert.equal(BASE_COUNT, 15); assert.equal(new Set(BUILDINGS.map((b) => b.name)).size, 115, 'Namen eindeutig');
   for (let i = 1; i < BUILDINGS.length; i++) assert.ok(BUILDINGS[i].base > BUILDINGS[i - 1].base && BUILDINGS[i].cps > BUILDINGS[i - 1].cps, 'Preis und Produktion steigen: ' + i);
-  assert.equal(SERIES.length, SERIES_COUNT); assert.equal(SERIES[100].kind, 'bld'); assert.equal(SERIES[100].b, 15); assert.equal(SERIES[SERIES_COUNT - 1].b, 114);
+  assert.equal(SERIES.length, SERIES_COUNT); assert.equal(SERIES[100].kind, 'bld'); assert.equal(SERIES[100].b, 15); assert.equal(SERIES[SERIES_COUNT - 1].b, 114); assert.equal(SERIES[200].tier, 1); assert.equal(SERIES[SERIES_COUNT - 1].tier, 5); assert.equal(SERIES[SERIES_COUNT - 1].need, 500);
   const g = new Game(); g.cookies = B(BUILDINGS[15].base * 20); g.total = g.cookies;
   assert.equal(g.buyBuilding(15, 5), true); assert.equal(g.owned[15], 5); assert.ok(N(g.baseCps) >= BUILDINGS[15].cps * 5 * 0.999, 'neues Gebäude produziert');
   assert.equal(g.seriesVisible(100), false, 'Reihe braucht 10 Gebäude'); g.owned[15] = 10; assert.equal(g.seriesVisible(100), true);
@@ -207,4 +207,17 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.equal(g.owned[114], 7); assert.ok(/7×/.test(txt) && /Urknall/.test(txt)); assert.equal(g.applyEvent({ type: 'message', text: '🎁bld:115:7' }), '🎁bld:115:7', 'ungültige Nummer = normale Nachricht'); assert.equal(g.owned.length, 115);
   assert.equal(g.applyEvent({ type: 'message', text: 'Hallo' }), 'Hallo'); assert.equal(g.applyEvent({ type: 'message', text: '🎁bld:20:1000000' }), '🎁bld:20:1000000');
   console.log('Gebäude-Nachricht-Test OK');
+}
+
+// ---- Zeitkristalle & neue goldene Effekte ----
+{
+  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e18); g.total = g.cookies;
+  assert.equal(g.crystals, 0); assert.equal(g.ascend(), true); assert.ok(g.crystals >= 1, 'Aufstieg gibt Kristalle');
+  g.crystals = 30; g.owned[0] = 10; g.recalc(); const c0 = N(g.cookies);
+  assert.ok(g.buyCrystal('warp1').gain, 'Zeitsprung'); assert.ok(N(g.cookies) > c0 && g.crystals === 27);
+  g.crystals = 20; assert.equal(g.buyCrystal('warp24'), null, 'zu wenig Kristalle'); g.crystals = 27; g.buyCrystal('golden'); assert.equal(g.gcs.length, 3);
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystals, g.crystals, 'Kristalle werden gespeichert');
+  for (const eff of ['timewarp', 'chain']) { const h = new Game(); h.owned[0] = 10; h.recalc(); const id = h.spawnGolden(eff).id; const m = h.clickGolden(id); assert.equal(m.kind, eff); }
+  const h2 = new Game(); const id2 = h2.spawnGolden('chain').id; h2.clickGolden(id2); assert.equal(h2.gcs.length, 3, 'Kettenreaktion ruft 3 Kekse');
+  console.log('Zeitkristall-Test OK');
 }

@@ -6,7 +6,7 @@ import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
 import { createChat } from './chat.js';
 import { sound } from './sound.js';
-import { renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
+import { renderTime, renderDaily, renderSkins, renderGift, renderPolls, renderSoundShop, renderMega, megaStateKey } from './features.js';
 import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
 import { skinById } from './extras.js';
 let megaKey = '';
@@ -281,7 +281,7 @@ function renderModal() {
     t.textContent = '🪽 Aufstieg';
     const g = game.chipsGain;
     body.innerHTML = `<div class="stack"><p>Beim Aufstieg setzt du Kekse, Gebäude und normale Upgrades zurück und erhältst <b>Himmelschips</b>. Jeder Chip gibt dauerhaft <b>+1 % Produktion</b> und schaltet himmlische Upgrades frei (die bleiben für immer).</p>
-      <div class="kv"><span>Chips gesamt</span><span>${fmt(game.chipsEarned)}</span><span>Chips verfügbar</span><span>${fmt(game.chipsAvailable)}</span><span>Chips beim Aufstieg</span><span><b>+${fmt(g)}</b></span></div>
+      <div class="kv"><span>Chips gesamt</span><span>${fmt(game.chipsEarned)}</span><span>Chips verfügbar</span><span>${fmt(game.chipsAvailable)}</span><span>Chips beim Aufstieg</span><span><b>+${fmt(g)}</b></span><span>Zeitkristalle beim Aufstieg</span><span><b>+${g.lt(1) ? 0 : 1 + Math.max(0, Math.floor(g.log10()))}</b> ⏳</span></div>
       <p class="note">Chips = ³√(Gesamt-Kekse / 1 Billion). Himmlische Upgrades findest du im Upgrade-Filter „Himmlisch“.</p>
       <button id="doAscend" ${g.lt(1) ? 'disabled' : ''}>🪽 Jetzt aufsteigen</button></div>`;
     $('#doAscend')?.addEventListener('click', () => { if (confirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
@@ -293,6 +293,7 @@ function renderModal() {
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
   else if (modalKind === 'polls') renderPolls($('#modalBody'), { toast, title: (t) => { $('#modalTitle').textContent = t; }, onSeen: (id) => { ls.set('cc_poll_seen', id); $('#pollBadge').textContent = ''; } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
+  else if (modalKind === 'time') renderTime($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
   else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
   else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
 }
