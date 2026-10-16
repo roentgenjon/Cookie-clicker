@@ -5,6 +5,7 @@ import { SING_MILESTONES } from './engine.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, fmtUp, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseBig } from './admin.js';
 import { Big } from './big.js';
+import { friends } from './friends.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -35,11 +36,12 @@ export async function renderGift(body, { game, fmt, toast, title, save }) {
   if (!cloud.loggedIn) { body.innerHTML = '<p>Melde dich unter „☁️ Anmelden“ an, um anderen Spielern Kekse zu schenken.</p>'; return; }
   body.innerHTML = `<form class="stack" id="giftForm">
     <p>Verschenke Kekse an einen anderen Spieler. Du kannst höchstens <b>die Hälfte</b> deiner Kekse verschenken, <b>5 Geschenke pro Tag</b>.</p>
-    <label>Empfänger<input type="text" id="gTo" list="gList" maxlength="16" placeholder="Name des Spielers" autocomplete="off"></label><datalist id="gList"></datalist>
+    <label>Empfänger<input type="text" id="gTo" list="gList" maxlength="16" placeholder="Name des Spielers" autocomplete="off"></label><datalist id="gList"></datalist>${friends.chipsHtml()}
     <label>Menge<input type="text" id="gAmt" placeholder="z. B. 1 mio, 5e9, 10k"></label>
     <div class="rowf"><button type="button" data-p="0.1">10 %</button><button type="button" data-p="0.25">25 %</button><button type="button" data-p="0.5">50 %</button></div>
     <div class="note">Du hast ${fmt(game.cookies)} Kekse.</div>
     <button type="submit" class="adm-go" id="gGo">🎁 Schenken</button><div class="note" id="gMsg"></div></form>`;
+  friends.bind(body, body.querySelector('#gTo'));
   const msg = (t) => { body.querySelector('#gMsg').textContent = t; };
   cloud.players().then((r) => { body.querySelector('#gList').innerHTML = r.players.filter((n) => n !== cloud.name).map((n) => `<option value="${esc(n)}">`).join(''); }).catch(() => {});
   body.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { body.querySelector('#gAmt').value = game.cookies.mulN(+b.dataset.p).floor().toString().replace(/e(\d+)$/, 'e+$1'); }));

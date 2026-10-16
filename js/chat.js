@@ -1,4 +1,5 @@
 // Chat: allgemeiner Chat für alle + private 1:1-Chats (Seitenleiste). Abruf per Polling.
+import { friends } from './friends.js';
 import { cloud } from './cloud.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -71,13 +72,19 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
     const side = body.querySelector('#csList'); if (!side) return;
     const gUn = globalUnread();
     side.innerHTML = `<button class="cs-item ${active === 'global' ? 'active' : ''}" data-c="global"><span class="cs-ic">🌍</span><span class="cs-n">Allgemein</span>${gUn && active !== 'global' ? `<span class="badge">${gUn > 9 ? '9+' : gUn}</span>` : ''}</button>`
-      + (cloud.loggedIn ? convs.map((c) => `<button class="cs-item ${active === c.id ? 'active' : ''}" data-c="${c.id}"><span class="cs-ic">👤</span><span class="cs-n"><i class="od ${isOn(c.name) ? 'on' : ''}"></i>${esc(c.name)}${c.lastText ? `<small>${c.lastFrom === myId() ? 'Du: ' : ''}${esc(c.lastText)}</small>` : ''}</span>${convUnread(c) && active !== c.id ? '<span class="dotu"></span>' : ''}</button>`).join('') : '');
+      + (cloud.loggedIn ? convs.map((c) => `<button class="cs-item ${active === c.id ? 'active' : ''}" data-c="${c.id}"><span class="cs-ic">👤</span><span class="cs-n"><i class="od ${isOn(c.name) ? 'on' : ''}"></i>${friends.has(c.name) ? '⭐ ' : ''}${esc(c.name)}${c.lastText ? `<small>${c.lastFrom === myId() ? 'Du: ' : ''}${esc(c.lastText)}</small>` : ''}</span>${convUnread(c) && active !== c.id ? '<span class="dotu"></span>' : ''}</button>`).join('') : '');
   }
   function paintHeader() {
     if (!body) return;
     const t = body.querySelector('#chatTitle'); if (!t) return;
     const c = convs.find((x) => x.id === active);
     t.textContent = active === 'global' ? '🌍 Allgemeiner Chat (für alle)' : `🔒 Privater Chat mit ${c ? c.name : '…'}${c && isOn(c.name) ? ' 🟢 online' : ''}`;
+    if (c && active !== 'global') { // Stern: Spieler zur Freundesliste hinzufügen/entfernen
+      const star = document.createElement('button'); star.type = 'button'; star.className = 'fr-star'; star.title = 'Freund hinzufügen/entfernen';
+      star.textContent = friends.has(c.name) ? '⭐' : '☆';
+      star.addEventListener('click', () => { friends.toggle(c.name); paintHeader(); paintSide(); });
+      t.append(' ', star);
+    }
     const inp = body.querySelector('#chatIn'); if (inp) inp.placeholder = active === 'global' ? 'Nachricht an alle…' : `Nachricht an ${c ? c.name : '…'}…`;
   }
 
@@ -156,6 +163,7 @@ export function createChat({ toast, isAdmin, onUnread, onNotify = () => {} }) {
     if (!picking) { box.innerHTML = ''; return; }
     box.innerHTML = '<form id="csForm" class="cs-form"><input type="text" id="csName" list="csPlayers" maxlength="16" placeholder="Spielername" autocomplete="off"><datalist id="csPlayers"></datalist><button type="submit">Chat starten</button><div class="note" id="csMsg"></div></form>';
     cloud.players().then((r) => { const dl = box.querySelector('#csPlayers'); if (dl) dl.innerHTML = r.players.filter((n) => n !== cloud.name).map((n) => `<option value="${esc(n)}">`).join(''); }).catch(() => {});
+    box.querySelector('#csForm').insertAdjacentHTML('afterend', friends.chipsHtml()); friends.bind(box, box.querySelector('#csName'));
     box.querySelector('#csName').focus();
     box.querySelector('#csForm').addEventListener('submit', async (e) => {
       e.preventDefault(); const name = box.querySelector('#csName').value.trim(); const msg = box.querySelector('#csMsg'); if (!name) return;

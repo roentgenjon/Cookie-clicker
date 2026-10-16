@@ -1,5 +1,6 @@
 import { BUILDINGS, BASE_COUNT, upgrade, TOTAL_UPGRADES, KIND, K } from './data.js';
 import { Big, fmtBig } from './big.js';
+import { hist } from './hist.js';
 import { Game, ACH } from './engine.js';
 import { cloud } from './cloud.js';
 import { renderAdmin } from './admin.js';
@@ -77,6 +78,29 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => { if (isSpace(e)) { stopHold(); if (!typing(e.target)) e.preventDefault(); } });
 addEventListener('blur', stopHold);
+
+// ---------- Auto-Kauf & Tastenkürzel ----------
+let autoBuy = ls.get('cc_auto') === '1';
+function paintAuto() { const b = $('#autoBtn'); if (b) { b.textContent = autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'; b.classList.toggle('on', autoBuy); } }
+function setAuto(v) { autoBuy = v; ls.set('cc_auto', v ? '1' : '0'); paintAuto(); if (modalKind === 'settings') renderSettings(); toast(v ? '🤖 Auto-Kauf an' : '🤖 Auto-Kauf aus'); }
+function autoBuyStep() {
+  let n = game.buyAllAffordable(false);
+  for (let k = 0; k < 30; k++) {
+    let best = -1, bc = null;
+    for (let i = 0; i < game.owned.length; i++) { const c = game.buildingCost(i, 1); if (c.lte(game.cookies) && (bc === null || c.lt(bc))) { bc = c; best = i; } }
+    if (best < 0 || !game.buyBuilding(best, 1)) break; n++;
+  }
+  if (n) lastKey = '';
+}
+const SHORTCUTS = [['Leertaste', 'Keks klicken (halten = schnell)'], ['A', 'Auto-Kauf an/aus'], ['U', 'Alle bezahlbaren Upgrades kaufen'], ['S', 'Statistik'], ['E', 'Erfolge'], ['C', 'Chat'], ['M', 'Mega-Upgrades'], ['O', 'Optionen'], ['Esc', 'Fenster schließen']];
+const KEYMODAL = { s: 'stats', e: 'ach', c: 'chat', m: 'mega', o: 'settings' };
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target) || banned) return;
+  const k = e.key.toLowerCase();
+  if (k === 'a') { setAuto(!autoBuy); }
+  else if (k === 'u' && !modal.open) { $('#buyAll').click(); }
+  else if (KEYMODAL[k] && !modal.open) { const b = document.querySelector(`nav [data-modal="${KEYMODAL[k]}"]`); if (b) b.click(); }
+});
 
 
 // ---------- Gewählte Klänge/Musik aus dem Spielstand anwenden ----------
@@ -233,7 +257,8 @@ function renderModal() {
   if (modalKind === 'stats') {
     t.textContent = '📊 Statistik';
     const all = game.totalReset.add(game.total);
-    body.innerHTML = `<div class="kv">
+    if (!$('#statsKv')) { body.innerHTML = '<div class="kv" id="statsKv"></div><div id="hist"></div>'; hist.draw($('#hist')); }
+    $('#statsKv').innerHTML = `
       <span>Kekse auf der Bank</span><span>${fmt(game.cookies)}</span>
       <span>Gebacken (diese Runde)</span><span>${fmt(game.total)}</span>
       <span>Gebacken (insgesamt)</span><span>${fmt(all)}</span>
@@ -248,7 +273,7 @@ function renderModal() {
       <span>Singularität</span><span>${game.sing ? `Stufe ${game.sing.toLocaleString('de-DE')} (Produktion hoch ${game.singPower.toFixed(3).replace('.', ',')})` : 'noch nicht gekauft'}</span>
       <span>Himmelschips</span><span>${fmt(game.chipsAvailable)} frei / ${fmt(game.chipsEarned)} gesamt</span>
       <span>Spielzeit</span><span>${fmtTime((Date.now() - game.start) / 1000)}</span>
-      <span>Offline-Ertrag</span><span>${Math.round(game.offline * 100)} % (max. ${fmtTime(game.offlineCap)})</span></div>`;
+      <span>Offline-Ertrag</span><span>${Math.round(game.offline * 100)} % (max. ${fmtTime(game.offlineCap)})</span>`;
   } else if (modalKind === 'ach') {
     t.textContent = `🏆 Erfolge (${game.achCount()} / ${ACH.length})`;
     body.innerHTML = `<p class="note">Jeder Erfolg gibt +0,2 % auf deine Produktion.</p><div class="ach-grid">${ACH.map((a) => `<div class="ach ${game.ach[a.id] ? '' : 'off'}" title="${esc(a.name)} – ${esc(a.desc)}">${a.icon}</div>`).join('')}</div>`;
@@ -280,6 +305,8 @@ function renderSettings() {
     <div class="rowf"><button id="setSound">${sound.enabled ? '🔊 Sound: an' : '🔇 Sound: aus'}</button><button id="testSound">🔔 Sound testen</button><button id="setMusic">${sound.music ? '🎵 Musik: an' : '🎵 Musik: aus'}</button><button id="setRain">🌧️ Keks-Regen: ${rain ? 'an' : 'aus'}</button><button id="setBoosts">🔥 Boost-Anzeige: ${showBoosts ? 'an' : 'aus'}</button></div>
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
+    <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button></div>
+    <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
   $('#setName').addEventListener('input', (e) => { game.name = e.target.value.trim() || 'Dein'; $('#bakeryName').textContent = game.name; });
   $('#setTheme').addEventListener('click', () => { const n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = n; ls.set('cc_theme', n); });
@@ -290,6 +317,7 @@ function renderSettings() {
   $('#setRain').addEventListener('click', () => { rain = !rain; ls.set('cc_rain', rain ? '1' : '0'); renderSettings(); });
   $('#setBoosts').addEventListener('click', () => { showBoosts = !showBoosts; ls.set('cc_boosts', showBoosts ? '1' : '0'); $('#buffs').innerHTML = ''; renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
+  $('#setAuto').addEventListener('click', () => setAuto(!autoBuy));
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
   $('#doImp').addEventListener('click', () => { try { game.load(JSON.parse(decodeURIComponent(escape(atob($('#exp').value.trim()))))); $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); toast('Importiert ✔'); } catch { toast('❌ Ungültiger Code'); } });
@@ -445,13 +473,15 @@ updateCloudBtn();
 })();
 
 // ---------- Hauptschleife ----------
-let prev = performance.now(); let lastWall = Date.now(); let saveT = 0; let cloudT = 0; let slowT = 0;
+let prev = performance.now(); let lastWall = Date.now(); let saveT = 0; let cloudT = 0; let slowT = 0; let histT = 0; let autoT = 0; hist.sample(game);
 function frame(now) {
   const dt = Math.min(1, (now - prev) / 1000); prev = now;
   // Tab war im Hintergrund/Gerät im Standby: verpasste Zeit gutschreiben
   const wall = Date.now(); const gap = (wall - lastWall) / 1000; lastWall = wall;
   if (gap > 3) { const r = game.catchUp(gap - dt); if (!r.gain.isZero()) toast(`😴 Während du weg warst (${fmtTime(r.offlineSecs)}): <b>+${fmt(r.gain)}</b> Kekse`); }
   game.tick(dt);
+  autoT += dt; if (autoBuy && autoT >= 1) { autoT = 0; autoBuyStep(); }
+  histT += dt; if (histT >= 60) { histT = 0; hist.sample(game); }
   $('#cookies').textContent = fmt(game.cookies);
   $('#cps').textContent = fmt(game.cps);
   $('#clickVal').textContent = fmt(game.clickValue);
@@ -469,6 +499,8 @@ function frame(now) {
   if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
   requestAnimationFrame(frame);
 }
+$('#autoBtn').addEventListener('click', () => setAuto(!autoBuy));
+paintAuto();
 requestAnimationFrame(frame);
 setInterval(saveLocal, 15000);
 addEventListener('beforeunload', saveLocal);
