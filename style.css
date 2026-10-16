@@ -217,3 +217,13 @@ dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-
 .poll{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg2);display:flex;flex-direction:column;gap:6px}.poll h4{margin:0;font-size:1.05rem}.poll.done{opacity:.8}
 .po{position:relative;overflow:hidden;display:flex;justify-content:space-between;gap:10px;text-align:left;padding:10px 12px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 45%,transparent) var(--w),var(--panel) var(--w))}
 .po.mine{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.po b{white-space:nowrap}
+
+/* ---- Freundesliste ---- */
+.fr-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}.fr-chip{padding:4px 10px;border-radius:999px;font-size:13px}.fr-star{background:none;border:0;font-size:1.1rem;cursor:pointer;padding:0 4px}.fr-hint{margin:6px 0}
+
+/* ---- Verlaufs-Diagramm ---- */
+.hist-t{margin:14px 0 6px}.hist-wrap{position:relative}.hist-svg{width:100%;height:auto;display:block}
+.hist-svg .hg{stroke:var(--line);stroke-width:1}.hist-svg .ht{fill:var(--mute);font-size:11px}.hist-svg .hl{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.hist-svg .hx{stroke:var(--mute);stroke-width:1;stroke-dasharray:3 3}.hist-svg .hd{fill:var(--accent);stroke:var(--panel);stroke-width:2}
+.hist-tip{position:absolute;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 14px #0006}
+.hist-tab{margin-top:6px;font-size:13px}.hist-tab table{width:100%;border-collapse:collapse;margin-top:6px}.hist-tab td,.hist-tab th{text-align:left;padding:3px 6px;border-bottom:1px solid var(--line)}
