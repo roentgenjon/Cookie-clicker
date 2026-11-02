@@ -59,6 +59,8 @@ python3 -m http.server 8000   # dann http://localhost:8000
 - 🕳️ Singularität: endlose Stufen (Produktion hoch 1,02 je Stufe) mit 7 Meilenstein-Boni (Stufe 10, 25, 50, 100, 250, 500, 1000).
 
 ## Zweitkonto
+In den Optionen („👥 Konten“): Zweitkonto per Namen anlegen – ohne eigenes Passwort (ein zufälliges wird erzeugt, nur der abgeleitete Schlüssel bleibt auf dem Gerät) – und mit einem Tipp zwischen den Konten wechseln.
+
 Abmelden, dann „👥 Zweitkonto (neu starten)“: das neue Konto beginnt mit leerem Spielstand, der alte bleibt in seinem Konto; mit „Anmelden“ wechselst du zurück.
 
 ## Sprache
