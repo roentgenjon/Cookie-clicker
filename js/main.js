@@ -510,9 +510,9 @@ async function pollEvents() {
     const since = Number(cloud.scopedGet('cc_bc')) || 0;
     const r = await cloud.events(since);
     cloud.scopedSet('cc_bc', String(r.now)); setMaint(r.maint); if (r.season !== undefined) { seasonSrv = r.season; applySeason(); } if (r.reload) await cloudReload();
-    for (const ev of r.events || []) handleEvent(ev, ev.from);
+    for (const ev of r.events || []) { if (r.shielded && !ev.gift) continue; handleEvent(ev, ev.from); } // geschütztes Konto: keine Admin-Ereignisse (zusätzlich zur Server-Filterung)
     pollHint(r.poll);
-    for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
+    for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event && !r.shielded) handleEvent(bc.event, bc.from); }
     if ((r.events || []).length || (r.broadcasts || []).some((b) => b.event)) cloudSave().catch(() => {});
   } catch (e) { if (e.data && e.data.banned) onBanned(e.data.reason, e.data.appeal); }
 }
