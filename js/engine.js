@@ -67,7 +67,7 @@ export class Game {
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
-    this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
+    this.boost = false; this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
@@ -176,7 +176,7 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    let base = sum.mulLog(this.globalLog + MONEY_LOG).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
+    let base = sum.mulLog(this.globalLog + (this.boost ? MONEY_LOG : 0)).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
     if (this.sing > 0 && !base.isZero()) base = Big.fromLog(base.log10() * Math.pow(SING_POW, this.sing)); // Singularität: Produktion hoch 1,02^Stufe
     this.baseCps = base.compress(); // Zahlenbereich stauchen (siehe big.js), damit Exponenten genau bleiben
   }
@@ -203,7 +203,7 @@ export class Game {
   }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
   get cps() { return this.baseCps.mulN(this.buffMult('frenzy')).clamp(); }
-  get clickValue() { return Big.fromLog(this.clickLog + MONEY_LOG).compress().add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
+  get clickValue() { return Big.fromLog(this.clickLog + (this.boost ? MONEY_LOG : 0)).compress().add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
   // Preisanpassung: Je mehr Kekse du insgesamt gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Gesamt-Kekse / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
@@ -430,6 +430,8 @@ export class Game {
     return true;
   }
 
+  // Kekse-Bonus (×10^MONEY_LOG auf alle Einnahmen): in den Optionen ein-/ausschaltbar; „Alles löschen“ schaltet ihn aus (echter Neustart)
+  setBoost(v) { this.boost = !!v; this.recalc(); }
   setSeason(id) { id = typeof id === 'string' ? id : ''; if (id === this.season) return false; this.season = id; this.recalc(); return true; }
 
   // ---- Erfolge ----
@@ -446,7 +448,7 @@ export class Game {
   serialize() {
     return {
       v: 2, z: 1, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
-      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, sgold: this.sgold,
+      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, sgold: this.sgold, boost: this.boost,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
@@ -456,6 +458,7 @@ export class Game {
     this.name = typeof d.name === 'string' ? d.name.slice(0, 20) : 'Dein';
     // z = 1: Zahlen sind schon im gestauchten Bereich (siehe big.js); ältere Spielstände mit riesigen Exponenten werden einmalig gestaucht
     const zz = (s) => (d.z === 1 ? Big.parse(s) : Big.parse(s).compress()).clamp();
+    this.boost = d.boost === undefined ? true : !!d.boost; // ältere Spielstände hatten den Bonus immer
     this.cookies = zz(d.cookies); this.total = zz(d.total); this.totalReset = zz(d.totalReset);
     this.clicks = num(d.clicks); this.golden = num(d.golden);
     if (Array.isArray(d.owned)) this.owned = BUILDINGS.map((_, i) => Math.min(OWN_CAP, Math.floor(num(d.owned[i]))));
