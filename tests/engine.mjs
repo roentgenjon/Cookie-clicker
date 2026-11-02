@@ -261,3 +261,14 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const m = new Game(); m.total = B(1e12); m.cookies = m.buildingCost(0, 5).mulN(1.001); assert.equal(m.maxAffordable(0), 5, 'Max-Kauf passt zum angepassten Preis');
   console.log('Preisanpassung-Test OK');
 }
+
+// ---- Auto-Kauf (Engine) ----
+{
+  const g = new Game(); g.cookies = B('1e40'); g.total = B(1);
+  const t0 = Date.now(); const n = g.autoBuy(true); const ms = Date.now() - t0;
+  assert.ok(n > 100, 'kauft viel auf einmal: ' + n); assert.ok(ms < 1500, 'schnell genug: ' + ms + ' ms');
+  assert.ok(g.owned.filter((x) => x > 0).length > 5, 'verteilt auf mehrere Gebäude'); assert.ok(g.cookies.cmp(B('1e40')) < 0);
+  const h = new Game(); h.cookies = B(5); assert.equal(h.autoBuy(true), 0, 'ohne Geld nichts');
+  const t1 = Date.now(); for (let i = 0; i < 20; i++) g.autoBuy(i % 5 === 0); assert.ok(Date.now() - t1 < 3000, '20 Durchgänge schnell');
+  console.log('Auto-Kauf-Test OK (' + ms + ' ms)');
+}

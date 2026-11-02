@@ -83,18 +83,14 @@ addEventListener('blur', stopHold);
 
 // ---------- Auto-Kauf & Tastenkürzel ----------
 let autoBuy = ls.get('cc_auto') === '1';
-const AUTO_SPEEDS = [[0.05, 'Blitz (20×/s)'], [0.1, 'Sehr schnell (10×/s)'], [0.25, 'Schnell (4×/s)'], [0.5, 'Normal (2×/s)'], [1, 'Gemütlich (1×/s)'], [2, 'Langsam (alle 2 s)'], [5, 'Sehr langsam (alle 5 s)'], [15, 'Alle 15 s'], [60, 'Jede Minute']];
-let autoEvery = (() => { const v = Number(ls.get('cc_autospeed')); return AUTO_SPEEDS.some(([s]) => s === v) ? v : 1; })();
+const AUTO_SPEEDS = [[0, 'Maximal (jedes Bild, ~60×/s)'], [0.05, 'Blitz (20×/s)'], [0.1, 'Sehr schnell (10×/s)'], [0.25, 'Schnell (4×/s)'], [0.5, 'Normal (2×/s)'], [1, 'Gemütlich (1×/s)'], [2, 'Langsam (alle 2 s)'], [5, 'Sehr langsam (alle 5 s)'], [15, 'Alle 15 s'], [60, 'Jede Minute']];
+let autoEvery = (() => { const raw = ls.get('cc_autospeed'); const v = raw === null ? 0.1 : Number(raw); return AUTO_SPEEDS.some(([s]) => s === v) ? v : 0.1; })();
+let autoCount = 0;
 function paintAuto() { const b = $('#autoBtn'); if (b) { b.textContent = autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'; b.classList.toggle('on', autoBuy); } }
 function setAuto(v) { autoBuy = v; ls.set('cc_auto', v ? '1' : '0'); paintAuto(); if (modalKind === 'settings') renderSettings(); toast(v ? '🤖 Auto-Kauf an' : '🤖 Auto-Kauf aus'); }
 function autoBuyStep() {
-  let n = game.buyAllAffordable(false);
-  for (let k = 0; k < 30; k++) {
-    let best = -1, bc = null;
-    for (let i = 0; i < game.owned.length; i++) { const c = game.buildingCost(i, 1); if (c.lte(game.cookies) && (bc === null || c.lt(bc))) { bc = c; best = i; } }
-    if (best < 0 || !game.buyBuilding(best, 1)) break; n++;
-  }
-  if (n) lastKey = '';
+  autoCount++;
+  if (game.autoBuy(autoCount % 5 === 0)) lastKey = ''; // Mega-Stufen nur jeden 5. Durchgang (rechenintensiver)
 }
 const SHORTCUTS = [['Leertaste', 'Keks klicken (halten = schnell)'], ['A', 'Auto-Kauf an/aus'], ['U', 'Alle bezahlbaren Upgrades kaufen'], ['S', 'Statistik'], ['E', 'Erfolge'], ['C', 'Chat'], ['M', 'Mega-Upgrades'], ['O', 'Optionen'], ['Esc', 'Fenster schließen']];
 const KEYMODAL = { s: 'stats', e: 'ach', c: 'chat', m: 'mega', o: 'settings' };
