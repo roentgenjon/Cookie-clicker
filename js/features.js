@@ -6,6 +6,7 @@ import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, fmtUp, seriesDesc, seriesNeedTex
 import { parseBig } from './admin.js';
 import { Big } from './big.js';
 import { friends } from './friends.js';
+import { askConfirm } from './dialog.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -163,7 +164,7 @@ export async function renderGuild(body, { fmt, toast, title }) {
         <button id="gLeave" class="danger">🚪 Gilde verlassen</button>`;
       const box = body.querySelector('.gchat'); if (box) box.scrollTop = box.scrollHeight;
       body.querySelector('#gcForm').onsubmit = (e) => { e.preventDefault(); const t = body.querySelector('#gcIn').value.trim(); if (t) run(async () => { await cloud.guild('chat', { text: t }); body.querySelector('#gcIn').value = ''; }); };
-      body.querySelector('#gLeave').onclick = () => { if (confirm('Gilde wirklich verlassen?')) run(() => cloud.guild('leave'), 'Du hast die Gilde verlassen'); };
+      body.querySelector('#gLeave').onclick = async () => { if (await askConfirm('Gilde wirklich verlassen?')) run(() => cloud.guild('leave'), 'Du hast die Gilde verlassen'); };
       body.querySelectorAll('[data-kick]').forEach((b) => { b.onclick = () => run(() => cloud.guild('kick', { name: b.dataset.kick }), 'Entfernt'); });
     } else {
       title('🏰 Gilden');

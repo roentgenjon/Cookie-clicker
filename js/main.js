@@ -10,6 +10,7 @@ import { renderGuild, renderDaily, renderSkins, renderGift, renderPolls, renderS
 import { TOTAL_ALL_TEXT, fmtUp } from './mega.js';
 import { SEASON_NAMES } from './data.js';
 import { i18n } from './i18n.js';
+import { askConfirm } from './dialog.js';
 import { skinById } from './extras.js';
 let megaKey = '';
 
@@ -300,7 +301,7 @@ function renderModal() {
       <div class="kv"><span>Chips gesamt</span><span>${fmt(game.chipsEarned)}</span><span>Chips verfügbar</span><span>${fmt(game.chipsAvailable)}</span><span>Chips beim Aufstieg</span><span><b>+${fmt(g)}</b></span></div>
       <p class="note">Chips = ³√(Gesamt-Kekse / 1 Billion). Himmlische Upgrades findest du im Upgrade-Filter „Himmlisch“.</p>
       <button id="doAscend" ${g.lt(1) ? 'disabled' : ''}>🪽 Jetzt aufsteigen</button></div>`;
-    $('#doAscend')?.addEventListener('click', () => { if (confirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
+    $('#doAscend')?.addEventListener('click', async () => { if (await askConfirm('Wirklich aufsteigen? Kekse, Gebäude und normale Upgrades werden zurückgesetzt.', 'Aufsteigen')) { game.ascend(); lastKey = ''; saveLocal(); modal.close(); toast('🪽 Aufgestiegen!'); } });
   } else if (modalKind === 'cloud') renderCloud();
   else if (modalKind === 'settings') renderSettings();
   else if (modalKind === 'daily') renderDaily($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { saveLocal(); $('#dailyBadge').textContent = game.claimableCount() || ''; lastKey = ''; } });
@@ -342,7 +343,7 @@ function renderSettings() {
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
   $('#doImp').addEventListener('click', () => { try { game.load(JSON.parse(decodeURIComponent(escape(atob($('#exp').value.trim()))))); $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); toast('Importiert ✔'); } catch { toast('❌ Ungültiger Code'); } });
-  $('#doReset').addEventListener('click', () => { if (confirm('Wirklich ALLES löschen?')) { game.hardReset(); lastKey = ''; saveLocal(); toast('Zurückgesetzt'); } });
+  $('#doReset').addEventListener('click', async () => { if (await askConfirm('Wirklich ALLES löschen? Das lässt sich nicht rückgängig machen.', 'Alles löschen')) { game.hardReset(); lastKey = ''; saveLocal(); toast('Zurückgesetzt'); if (cloud.loggedIn) cloudSave(true).catch(() => {}); /* sofort auch in die Cloud, sonst kommt beim nächsten Laden der alte Stand zurück */ } });
 }
 
 async function renderCloud() {

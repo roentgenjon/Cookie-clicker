@@ -239,3 +239,8 @@ body[data-season=easter] #seasonTag{background:linear-gradient(90deg,#e58bd2,#7f
 body[data-season=summer] #seasonTag{background:linear-gradient(90deg,#f5a623,#2fb4e9)}
 
 .gchat{max-height:220px;overflow:auto;display:grid;gap:6px;padding:6px;border:1px solid var(--line,rgba(128,128,128,.3));border-radius:8px;margin-bottom:6px}
+
+.ask-dlg{max-width:min(92vw,420px);border:1px solid var(--line,rgba(128,128,128,.4));border-radius:12px;background:var(--panel,var(--bg,#2b1d14));color:var(--fg,inherit);padding:16px}
+.ask-dlg::backdrop{background:rgba(0,0,0,.6)}
+.ask-dlg p{margin:0 0 12px}
+.ask-ok{background:var(--bad,#c0392b);color:#fff}

@@ -2,6 +2,7 @@
 // Die Rechte werden vom Server geprüft (nur die Admin-Konten); diese Oberfläche ist nur die Bedienung.
 import { BUILDINGS, BASE_COUNT } from './data.js';
 import { cloud } from './cloud.js';
+import { askConfirm } from './dialog.js';
 
 import { Big, ZERO } from './big.js';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,7 +78,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     if (!sel) { say('Wähle zuerst in der Liste einen Spieler oder „Alle Spieler“.', false); return paint(); }
     try {
       if (sel === ALL) {
-        if (event.type === 'upgrades' && event.mode === 'none' && !confirm('Wirklich bei ALLEN Spielern alle Upgrades entfernen?')) return;
+        if (event.type === 'upgrades' && event.mode === 'none' && !(await askConfirm('Wirklich bei ALLEN Spielern alle Upgrades entfernen?'))) return;
         await call('broadcast', { event, text: '' });
       } else await call('event', { target: sel, event });
       say(`${label} → ${nameOf(sel)} gesendet`); toast(`✔ ${label} → ${nameOf(sel)}`);
@@ -315,7 +316,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         try { await call('adminAdd', { name }); say(`${name} ist jetzt Admin`); await loadAdmins(); } catch { return; }
         return paint();
       }
-      case 'adminDel': { if (!confirm('Diesem Admin die Rechte entziehen?')) return; try { await call('adminDel', { target: btn.dataset.id }); say('Admin entfernt'); await loadAdmins(); } catch { return; } return paint(); }
+      case 'adminDel': { if (!(await askConfirm('Diesem Admin die Rechte entziehen?'))) return; try { await call('adminDel', { target: btn.dataset.id }); say('Admin entfernt'); await loadAdmins(); } catch { return; } return paint(); }
       case 'muteC': {
         const min = pickDur('#muteC', '#muteC'); if (!min) { say('Bitte eine gültige Dauer eingeben (z. B. 45 min, 3 Std, 2 Tage)', false); return paint(); }
         try { await call('mute', { target: sel, minutes: min }); say(`${nameOf(sel)} ist ${fmtDur(min)} stumm`); await refresh(); } catch { return; }
@@ -327,7 +328,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return paint();
       }
       case 'chatClear': {
-        if (!confirm('Den gesamten Chat wirklich leeren?')) return;
+        if (!(await askConfirm('Den gesamten Chat wirklich leeren?'))) return;
         try { await call('chatClear', {}); say('Chat geleert'); } catch { return; }
         return paint();
       }
@@ -347,7 +348,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return paint();
       }
       case 'pollClose': { try { await call('pollClose', { poll: btn.dataset.id }); say('Umfrage geändert'); await loadPolls(); } catch { return; } return paint(); }
-      case 'pollDel': { if (!confirm('Diese Umfrage samt Stimmen löschen?')) return; try { await call('pollDel', { poll: btn.dataset.id }); say('Umfrage gelöscht'); await loadPolls(); } catch { return; } return paint(); }
+      case 'pollDel': { if (!(await askConfirm('Diese Umfrage samt Stimmen löschen?'))) return; try { await call('pollDel', { poll: btn.dataset.id }); say('Umfrage gelöscht'); await loadPolls(); } catch { return; } return paint(); }
       case 'apReply': { const id = btn.dataset.id; const text = (root.querySelector('#ar_' + id) || {}).value || ''; try { await call('appealReply', { target: id, text }); say('Antwort gesendet'); await loadAppeals(); } catch { return; } return paint(); }
       case 'apUnban': { const id = btn.dataset.id; try { await call('ban', { target: id, banned: false }); say('Entbannt'); await loadAppeals(); await refresh(); } catch { return; } return paint(); }
       case 'pollShare': { try { await call('pollShare', { poll: btn.dataset.id }); say('Ergebnis im Chat gepostet'); } catch { return; } return paint(); }
@@ -355,9 +356,9 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'seasonSet': { try { await call('seasonSet', { season: val('#sSeason'), hours: intIn('#sHours', 1, 1440, 24) }); say('Event gestartet'); await loadMaint(); } catch { return; } return paint(); }
       case 'seasonOff': { try { await call('seasonSet', { season: '' }); say('Admin-Event beendet'); await loadMaint(); } catch { return; } return paint(); }
       case 'susDel': { try { await call('susDel', { target: btn.dataset.id }); say('Erledigt'); await loadSus(); } catch { return; } return paint(); }
-      case 'susBan': { if (!confirm('Diesen Spieler wirklich sperren?')) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
+      case 'susBan': { if (!(await askConfirm('Diesen Spieler wirklich sperren?'))) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
       case 'bkReload': { await loadBk(); return paint(); }
-      case 'bkRestore': { if (!confirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).')) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
+      case 'bkRestore': { if (!(await askConfirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).'))) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
         const p = players.find((x) => x.id === sel); const reason = (root.querySelector('#banMsg') || {}).value || '';
@@ -366,12 +367,12 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         return paint();
       }
       case 'reset': {
-        if (!confirm(`Spielstand von ${nameOf(sel)} wirklich zurücksetzen?`)) return;
+        if (!(await askConfirm(`Spielstand von ${nameOf(sel)} wirklich zurücksetzen?`))) return;
         try { await call('event', { target: sel, event: { type: 'reset' } }); say('Zurücksetzen angeordnet'); } catch { return; }
         return paint();
       }
       case 'del': {
-        if (!confirm(`Konto „${nameOf(sel)}“ endgültig löschen?`)) return;
+        if (!(await askConfirm(`Konto „${nameOf(sel)}“ endgültig löschen?`))) return;
         try { await call('delete', { target: sel }); say('Konto gelöscht'); sel = null; info = ''; await refresh(); } catch { return; }
         return paint();
       }
