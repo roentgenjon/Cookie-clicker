@@ -49,8 +49,8 @@ function unpackBits(str, len) {
   return rawUnpack(str.startsWith('b:') ? str.slice(2) : str, len);
 }
 
-// Kekse-Bonus: alle Einnahmen (Produktion und Klicks) ×10^28
-export const MONEY_LOG = 28;
+// Kekse-Bonus: alle Einnahmen (Produktion und Klicks) ×10^100
+export const MONEY_LOG = 100;
 export const CRYSTAL_SHOP = [
   { id: 'warp1', icon: '⏩', name: 'Zeitsprung: 1 Stunde Produktion', cost: 3 },
   { id: 'warp24', icon: '⏭️', name: 'Großer Zeitsprung: 24 Stunden Produktion', cost: 25 },
