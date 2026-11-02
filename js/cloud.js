@@ -56,6 +56,23 @@ export const cloud = {
   },
   logout() { ls.del('cc_id'); ls.del('cc_secret'); ls.del('cc_name'); },
 
+  // ---- Mehrere Konten auf diesem Gerät: Zugangsdaten (der abgeleitete Schlüssel, nie das Passwort) liegen lokal, Wechsel ohne Passwort ----
+  accounts() { try { const l = JSON.parse(ls.get('cc_accounts') || '[]'); return Array.isArray(l) ? l.filter((a) => a && a.id && a.secret && a.name) : []; } catch { return []; } },
+  saveAccounts(list) { ls.set('cc_accounts', JSON.stringify(list.slice(0, 12))); },
+  remember() { if (!this.loggedIn) return; const l = this.accounts().filter((a) => a.id !== this.id); l.unshift({ name: this.name, id: this.id, secret: this.secret }); this.saveAccounts(l); },
+  forget(id) { this.saveAccounts(this.accounts().filter((a) => a.id !== id)); },
+  switchTo(acc) { ls.set('cc_id', acc.id); ls.set('cc_secret', acc.secret); ls.set('cc_name', acc.name); this.remember(); },
+  // Zweitkonto ohne eigenes Passwort: ein zufälliges Passwort wird erzeugt, nur der abgeleitete Schlüssel bleibt auf dem Gerät. Das Konto wird erst durch das erste Speichern angelegt.
+  async prepareSecondary(name) {
+    name = name.trim();
+    if (name.length < 2 || name.length > 16) throw new Error('Name: 2–16 Zeichen');
+    const pw = hex(crypto.getRandomValues(new Uint8Array(16)));
+    const { id, secret } = await derive(name, pw);
+    try { await post('/api/load', 'POST', { id, secret }); throw new Error('Dieser Name ist schon vergeben (Groß-/Kleinschreibung zählt nicht).'); }
+    catch (e) { if (e.status !== 404) { if (e.status === 403) throw new Error('Dieser Name ist schon vergeben (Groß-/Kleinschreibung zählt nicht).'); throw e; } }
+    return { name, id, secret };
+  },
+
   save(data, score, keepalive = false, setup, stats) {
     return post('/api/save', 'PUT', { id: this.id, secret: this.secret, name: this.name, data, score, setup, stats }, { keepalive });
   },

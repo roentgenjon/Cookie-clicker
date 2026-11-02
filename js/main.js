@@ -315,6 +315,38 @@ function renderModal() {
   else if (modalKind === 'admin') renderAdmin($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
 }
 
+// ---- Konten (Optionen): Zweitkonto ohne eigenes Passwort anlegen, mit einem Tipp wechseln ----
+async function switchAccount(acc, fresh) {
+  const prev = { id: cloud.id, secret: cloud.secret, name: cloud.name };
+  try {
+    try { await cloudSave(); } catch { /* weiter */ }
+    cloud.switchTo(acc);
+    if (fresh) { game.hardReset(); game.name = acc.name; await cloudSave(false); } // legt das neue Konto an
+    else { const r = await cloud.load(); if (r.data) game.load(r.data); game.name = cloud.name; }
+    $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); updateCloudBtn(); checkAdmin(); startEvents();
+    toast(`👤 Jetzt als <b>${esc(acc.name)}</b> unterwegs`); return true;
+  } catch (e) {
+    if (prev.id) { cloud.switchTo(prev); try { const r = await cloud.load(); if (r.data) game.load(r.data); game.name = cloud.name; lastKey = ''; saveLocal(); $('#bakeryName').textContent = game.name; } catch { /* egal */ } } // zurück zum bisherigen Konto samt Spielstand
+    if (fresh) cloud.forget(acc.id);
+    toast('❌ ' + e.message + (e.data && e.data.needSetup ? ' (reservierter Admin-Name)' : '')); return false;
+  }
+}
+function renderAccounts() {
+  const box = $('#accBox'); if (!box) return;
+  if (!cloud.loggedIn) { box.innerHTML = '<h4>👥 Konten</h4><p class="note">Melde dich zuerst an (☁️), dann kannst du hier ein Zweitkonto anlegen und wechseln.</p>'; return; }
+  cloud.remember();
+  const others = cloud.accounts().filter((a) => a.id !== cloud.id);
+  box.innerHTML = `<h4>👥 Konten</h4><p class="note">Angemeldet als <b>${esc(cloud.name)}</b>. Ein Zweitkonto bekommt kein eigenes Passwort und startet leer; du wechselst mit einem Tipp.</p>
+    ${others.map((a) => `<div class="adm-sched"><span>👤 ${esc(a.name)}</span><span></span><span><button data-sw="${a.id}">Wechseln</button> <button class="danger" data-fg="${a.id}" title="Nur von diesem Gerät entfernen (das Konto bleibt bestehen)">✕</button></span></div>`).join('') || '<div class="note">Noch kein Zweitkonto.</div>'}
+    <div class="adm-grid"><label class="fld"><span>Name des Zweitkontos</span><input type="text" id="accName" maxlength="16" placeholder="z. B. MeinZweiter"></label><div class="adm-btns"><button id="accNew">➕ Zweitkonto anlegen</button></div></div>`;
+  box.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', async () => { const acc = cloud.accounts().find((a) => a.id === b.dataset.sw); if (acc && (await switchAccount(acc, false))) renderSettings(); }));
+  box.querySelectorAll('[data-fg]').forEach((b) => b.addEventListener('click', async () => { if (await askConfirm('Dieses Konto von diesem Gerät entfernen? Das Konto bleibt auf dem Server bestehen, aber ein Zweitkonto ohne eigenes Passwort kannst du danach nicht mehr öffnen.', 'Entfernen')) { cloud.forget(b.dataset.fg); renderAccounts(); } }));
+  $('#accNew').addEventListener('click', async () => {
+    const name = $('#accName').value; $('#accNew').disabled = true;
+    try { const acc = await cloud.prepareSecondary(name); if (await switchAccount(acc, true)) renderSettings(); } catch (e) { toast('❌ ' + e.message); }
+    $('#accNew') && ($('#accNew').disabled = false);
+  });
+}
 function renderSettings() {
   $('#modalTitle').textContent = '⚙️ Optionen';
   $('#modalBody').innerHTML = `<div class="stack">
@@ -324,6 +356,7 @@ function renderSettings() {
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="setLang" data-noi18n>🌐 Sprache / Language: ${i18n.lang === 'en' ? 'English' : 'Deutsch'}</button></div>
+    <div class="adm-sec" id="accBox"></div>
     <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button><label>Auto-Kauf Tempo<select id="setAutoSpeed">${AUTO_SPEEDS.map(([s, t]) => `<option value="${s}" ${s === autoEvery ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
     <details><summary>📲 Als App installieren</summary><p class="note">iPhone/iPad (Safari): Teilen-Symbol → „Zum Home-Bildschirm“. Android/Chrome: Menü → „App installieren“. Dann startet das Spiel wie eine App im Vollbild.</p></details>
     <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
@@ -339,6 +372,7 @@ function renderSettings() {
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#setLang').addEventListener('click', () => { saveLocal(); i18n.set(i18n.lang === 'en' ? 'de' : 'en'); });
   $('#setAutoSpeed').addEventListener('change', (e) => { autoEvery = Number(e.target.value); ls.set('cc_autospeed', String(autoEvery)); autoT = 0; toast('🤖 Auto-Kauf-Tempo geändert'); });
+  renderAccounts();
   $('#setAuto').addEventListener('click', () => setAuto(!autoBuy));
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
