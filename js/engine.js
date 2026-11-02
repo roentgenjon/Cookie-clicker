@@ -53,6 +53,7 @@ function unpackBits(str, len) {
 export const MONEY_LOG = 100;
 // Preisanpassung (siehe priceLog): Exponent des Faktors (Gesamt-Kekse / 1 Mio)^PRICE_EXP; 0 = Preise unverändert
 export const PRICE_EXP = 0.25;
+export const OWN_CAP = 1e15; // maximale Anzahl je Gebäude (unter 2^53, damit jede Anzahl genau bleibt)
 export class Game {
   constructor() {
     this.name = 'Dein';
@@ -209,9 +210,11 @@ export class Game {
   // Es zählt die Gesamtzahl (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger.
   get priceLog() { const t = this.totalReset.add(this.total); if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
   buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog).compress(); }
-  maxAffordable(i) { return geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand().mulLog(-this.priceLog)); }
+  // Mehr als OWN_CAP je Gebäude gibt es nicht: darüber sind Anzahlen als Zahl nicht mehr genau (jeder weitere Kauf ginge verloren)
+  maxAffordable(i) { const room = OWN_CAP - this.owned[i]; return room > 0 ? geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand().mulLog(-this.priceLog), room) : 0; }
   buyBuilding(i, amount) {
     if (amount === 'max') amount = this.maxAffordable(i);
+    amount = Math.min(amount, OWN_CAP - this.owned[i]);
     if (!(amount > 0)) return false;
     const cost = this.buildingCost(i, amount);
     if (cost.gt(this.cookies)) return false;
@@ -265,13 +268,14 @@ export class Game {
   autoBuy(withSeries = false) {
     let n = this.buyAllAffordable(false);
     for (let round = 0; round < 3; round++) {
-      const ok = []; for (let i = 0; i < this.owned.length; i++) if (this.buildingCost(i, 1).lte(this.cookies)) ok.push(i);
+      const ok = []; for (let i = 0; i < this.owned.length; i++) if (this.owned[i] < OWN_CAP && this.buildingCost(i, 1).lte(this.cookies)) ok.push(i);
       if (!ok.length) break;
       const share = this.cookies.divN(ok.length).expand().mulLog(-this.priceLog); let any = false;
-      for (const i of ok) { const k = Math.max(1, geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], share)); if (this.buyBuilding(i, k)) { n += k; any = true; } }
+      for (const i of ok) { const k = Math.max(1, geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], share, OWN_CAP - this.owned[i])); if (this.buyBuilding(i, k)) { n += k; any = true; } }
       if (!any) break;
     }
     if (withSeries) n += this.buyAllSeries();
+    for (let k = 0; k < 25 && this.singAvailable && this.cookies.gte(this.singCost); k++) { if (!this.buySing()) break; n++; } // Singularität (endlose Stufen) mitkaufen
     return n;
   }
   buyAllAffordable(heaven = false, kind = null) {
@@ -454,7 +458,7 @@ export class Game {
     const zz = (s) => (d.z === 1 ? Big.parse(s) : Big.parse(s).compress()).clamp();
     this.cookies = zz(d.cookies); this.total = zz(d.total); this.totalReset = zz(d.totalReset);
     this.clicks = num(d.clicks); this.golden = num(d.golden);
-    if (Array.isArray(d.owned)) this.owned = BUILDINGS.map((_, i) => Math.floor(num(d.owned[i])));
+    if (Array.isArray(d.owned)) this.owned = BUILDINGS.map((_, i) => Math.min(OWN_CAP, Math.floor(num(d.owned[i]))));
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }

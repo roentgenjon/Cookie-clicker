@@ -249,7 +249,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const g2 = new Game(); g2.load(JSON.parse(JSON.stringify({ ...g.serialize(), cookies: '1e8.5e42'.replace('1e8.5e42', '1.5e8500000000000000000000000000000000000000000') }))); assert.ok(g2.cookies.log10() <= LC_MAX + 1, 'riesiger Spielstand wird beim Laden gestaucht');
   assert.ok(!fmtBig(g.cookies).includes('×'), 'keine Mantisse mehr in der Anzeige'); assert.ok(/^e[\d.]+$/.test(fmtBig(g.cookies)), 'Anzeige: ' + fmtBig(g.cookies));
   // Kauf bei gestauchten Preisen funktioniert
-  const h = new Game(); h.owned.fill(1e30); h.recalc(); h.cookies = Big.fromLog(LC_MAX); h.total = h.cookies; assert.ok(h.maxAffordable(0) > 1e10, 'Max-Kauf bei riesigen Zahlen: ' + h.maxAffordable(0)); assert.ok(h.buyBuilding(0, 'max'));
+  const h = new Game(); h.owned.fill(1e10); h.recalc(); h.cookies = Big.fromLog(LC_MAX); h.total = h.cookies; assert.ok(h.maxAffordable(0) > 1e12, 'Max-Kauf bei riesigen Zahlen: ' + h.maxAffordable(0)); assert.ok(h.buyBuilding(0, 'max'));
   console.log('Stauchungs-Test OK');
 }
 
@@ -274,4 +274,15 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   const h = new Game(); h.cookies = B(5); assert.equal(h.autoBuy(true), 0, 'ohne Geld nichts');
   const t1 = Date.now(); for (let i = 0; i < 20; i++) g.autoBuy(i % 5 === 0); assert.ok(Date.now() - t1 < 3000, '20 Durchgänge schnell');
   console.log('Auto-Kauf-Test OK (' + ms + ' ms)');
+}
+
+// ---- Anzahl-Obergrenze & Singularität im Auto-Kauf ----
+{
+  const { OWN_CAP } = await import('../js/engine.js');
+  const { Big: BG } = await import('../js/big.js'); const g = new Game(); g.owned[0] = OWN_CAP - 5; g.cookies = BG.fromLog(2e14); g.total = g.cookies;
+  assert.equal(g.maxAffordable(0), 5, 'nie über die Obergrenze'); assert.ok(g.buyBuilding(0, 'max') && g.owned[0] === OWN_CAP); assert.equal(g.buyBuilding(0, 1), false, 'am Limit kein Kauf mehr');
+  const l = new Game(); l.load({ v: 2, owned: [4.5e43, 10], z: 1 }); assert.equal(l.owned[0], OWN_CAP, 'alte riesige Anzahlen werden begrenzt'); assert.equal(l.owned[1], 10);
+  const s = new Game(); s.owned.fill(1e6); s.bought.fill(1); s.series.fill(1e9); s.recalc(); s.cookies = s.singCost.mulN(1e6); s.total = s.cookies; const sg0 = s.sing; s.autoBuy(false);
+  assert.ok(s.sing > sg0, 'Auto-Kauf kauft Singularität mit: ' + s.sing);
+  console.log('Obergrenze-Test OK');
 }
