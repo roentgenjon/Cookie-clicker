@@ -55,7 +55,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
   let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
-  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -100,6 +100,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
+  async function loadShield() { if (!isLogViewer) return; try { shieldItems = (await cloud.admin('shieldList')).items; } catch { shieldItems = []; } }
   async function loadMaint() { try { const [m, s] = await Promise.all([cloud.admin('maintGet'), cloud.admin('seasonGet')]); maintData = { maint: m.maint, season: s.season, seasons: s.seasons }; } catch (e) { maintData = { error: e.message }; } }
   async function loadSus() { try { susItems = (await cloud.admin('susList')).items; } catch { susItems = []; } }
   async function loadBk() { bkItems = null; if (!sel || sel === ALL) return; try { bkItems = (await cloud.admin('backupList', { target: sel })).items; } catch (e) { bkItems = { error: e.message }; } }
@@ -198,7 +199,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
         return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
       }
-      case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b>.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>`;
+      case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b> – nur Entity_2806 kann den Schutz aufheben.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>${isLogViewer ? `<div class="adm-sec"><h4>🛡️ Geschützte Konten (nur du kannst den Schutz aufheben)</h4>${shieldItems === null ? '<div class="adm-empty">Lade…</div>' : shieldItems.length ? shieldItems.map((x) => `<div class="adm-sched"><span>🛡️ ${esc(x.name)}</span><span></span><button data-act="shieldOff" data-id="${x.id}">Schutz aufheben</button></div>`).join('') : '<div class="adm-hint">Kein Konto ist geschützt.</div>'}</div>` : ''}`;
       case 'bk': {
         if (all) return '<div class="adm-hint">Sicherungen gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         if (!bkItems) return '<div class="adm-empty">Lade…</div>';
@@ -260,7 +261,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const row = e.target.closest('.adm-row[data-id]');
     if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; if (tab === 'bk') { loadBk().then(paint); } return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } if (tab === 'maint') { await loadMaint(); paint(); } if (tab === 'sus') { await loadSus(); paint(); } if (tab === 'bk') { await loadBk(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } if (tab === 'maint') { await loadMaint(); paint(); } if (tab === 'lock') { await loadShield(); paint(); } if (tab === 'sus') { await loadSus(); paint(); } if (tab === 'bk') { await loadBk(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -360,11 +361,12 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'susBan': { if (!(await askConfirm('Diesen Spieler wirklich sperren?'))) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
       case 'bkReload': { await loadBk(); return paint(); }
       case 'bkRestore': { if (!(await askConfirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).'))) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
+      case 'shieldOff': { if (!(await askConfirm('Den Schutz dieses Kontos aufheben? Danach hat das Admin-Panel wieder Einfluss darauf.', 'Aufheben'))) return; try { await call('shieldOff', { target: btn.dataset.id }); say('Schutz aufgehoben'); await loadShield(); } catch { return; } return paint(); }
       case 'selfShield': {
         if (!(await askConfirm('Dein Konto DAUERHAFT vor dem Admin-Panel schützen? Danach kann niemand mehr (auch du nicht) per Admin-Panel Einfluss darauf nehmen. Das kann nicht rückgängig gemacht werden.', 'Weiter'))) return;
         if (!(await askConfirm('Letzte Rückfrage: Wirklich für immer schützen? Du behältst dein Admin-Panel für andere Spieler.', 'Für immer schützen'))) return;
         try { await cloud.admin('selfShield', { confirm: 'SCHUETZEN' }); } catch (e) { say(e.message === 'Unbekannte Aktion' ? 'Der Server kennt diese Funktion noch nicht (Update steht aus) – der Schutz wurde NICHT gesetzt.' : e.message, false); return paint(); }
-        say('🛡️ Dein Konto ist jetzt dauerhaft geschützt.'); return paint();
+        say('🛡️ Dein Konto ist jetzt dauerhaft geschützt – nur Entity_2806 kann das aufheben.'); await loadShield(); return paint();
       }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
