@@ -51,13 +51,8 @@ function unpackBits(str, len) {
 
 // Kekse-Bonus: alle Einnahmen (Produktion und Klicks) ×10^100
 export const MONEY_LOG = 100;
-export const CRYSTAL_SHOP = [
-  { id: 'warp1', icon: '⏩', name: 'Zeitsprung: 1 Stunde Produktion', cost: 3 },
-  { id: 'warp24', icon: '⏭️', name: 'Großer Zeitsprung: 24 Stunden Produktion', cost: 25 },
-  { id: 'golden', icon: '🌟', name: '3 goldene Kekse rufen', cost: 2 },
-  { id: 'frenzy', icon: '🔥', name: 'Raserei (77 s)', cost: 2 },
-  { id: 'click', icon: '👆', name: 'Klick-Raserei ×777 (13 s)', cost: 2 },
-];
+// Preisanpassung (siehe priceLog): Exponent des Faktors (Gesamt-Kekse / 1 Mio)^PRICE_EXP; 0 = Preise unverändert
+export const PRICE_EXP = 0.25;
 export class Game {
   constructor() {
     this.name = 'Dein';
@@ -71,7 +66,7 @@ export class Game {
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
-    this.crystals = 0; this.crystalBuys = 0; this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
+    this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
@@ -122,15 +117,16 @@ export class Game {
   }
   get seriesTotal() { let t = 0; for (const n of this.series) t += n; return t; }
   seriesVisible(i) { const s = SERIES[i]; return s.kind === 'bld' ? this.owned[s.b] >= s.need : this.totalReset.add(this.total).gte(s.baked); }
-  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n); }
+  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n).mulLog(this.priceLog); }
+  seriesMax(i, budget = this.cookies) { return seriesMaxAffordable(SERIES[i], this.series[i], Big.from(budget).mulLog(-this.priceLog)); }
   // n = Anzahl oder 'max'; gibt die gekauften Stufen zurück
   buySeries(i, n = 1) {
     const s = SERIES[i]; if (!s || !this.seriesVisible(i)) return 0;
     const have = this.series[i];
-    if (n === 'max') n = seriesMaxAffordable(s, have, this.cookies);
+    if (n === 'max') n = this.seriesMax(i);
     n = Math.min(n, SERIES_LEVELS - have);
     if (!(n >= 1)) return 0;
-    const cost = seriesCost(s, have, n);
+    const cost = this.seriesPrice(i, n);
     if (cost.gt(this.cookies)) return 0;
     this.cookies = this.cookies.sub(cost); this.series[i] = have + n; this.applySeriesFactor(i, n); this.daily.prog.upgrades += Math.min(n, 1e6); this.updateCps();
     return n;
@@ -144,7 +140,7 @@ export class Game {
       vis.sort((a, b) => this.seriesPrice(a, 1).cmp(this.seriesPrice(b, 1)));
       const share = this.cookies.divN(vis.length); let any = false;
       for (const i of vis) {
-        const n = seriesMaxAffordable(SERIES[i], this.series[i], share.min(this.cookies));
+        const n = this.seriesMax(i, share.min(this.cookies));
         if (n >= 1) { const got = this.buySeries(i, n); if (got) { total += got; any = true; } }
       }
       if (!any) break;
@@ -209,8 +205,11 @@ export class Game {
   get clickValue() { return Big.fromLog(this.clickLog + MONEY_LOG).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
-  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount); }
-  maxAffordable(i) { return geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies); }
+  // Preisanpassung: Je mehr Kekse du insgesamt gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Gesamt-Kekse / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
+  // Es zählt die Gesamtzahl (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger.
+  get priceLog() { const t = this.totalReset.add(this.total); if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
+  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog); }
+  maxAffordable(i) { return geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.mulLog(-this.priceLog)); }
   buyBuilding(i, amount) {
     if (amount === 'max') amount = this.maxAffordable(i);
     if (!(amount > 0)) return false;
@@ -388,8 +387,6 @@ export class Game {
         // Gebäude-Geschenk als Nachricht verpackt („🎁bld:<Nr.>:<Anzahl>“): funktioniert auch mit älteren Servern, die nur die ersten 15 Gebäude als eigenes Ereignis kennen
         const m = /^🎁bld:(\d{1,3}):(\d{1,6})$/.exec(String(ev.text || ''));
         if (m && +m[1] < BUILDINGS.length && +m[2] >= 1 && +m[2] <= 100000) { this.owned[+m[1]] += +m[2]; this.updateCps(); return `+${m[2]}× ${BUILDINGS[+m[1]].name}!`; }
-        const c = /^🎁cry:(\d{1,9})$/.exec(String(ev.text || '')); // Zeitkristall-Geschenk (ebenfalls als Nachricht verpackt)
-        if (c && +c[1] >= 1) { this.crystals += +c[1]; return `+${(+c[1]).toLocaleString('de-DE')} Zeitkristalle ⏳!`; }
         return ev.text;
       }
       case 'reset': { const n = this.name; this.hardReset(); this.name = n; return 'Dein Spielstand wurde zurückgesetzt.'; }
@@ -407,7 +404,7 @@ export class Game {
   ascend() {
     const gain = this.chipsGain;
     if (gain.lt(1)) return false;
-    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++; this.crystalBuys = 0; this.crystals += 1 + Math.max(0, Math.floor(gain.log10()));
+    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++;
     this.cookies = ZERO; this.total = ZERO;
     this.owned.fill(0);
     this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);
@@ -418,28 +415,10 @@ export class Game {
 
   setSeason(id) { id = typeof id === 'string' ? id : ''; if (id === this.season) return false; this.season = id; this.recalc(); return true; }
 
-  // ---- Zeitkristalle (gibt es beim Aufstieg; werden gegen Sofort-Hilfen getauscht) ----
-  // Zeitkristalle für Kekse kaufen: 2 Stunden Produktion + 1.000, je Kauf in dieser Runde 15 % teurer (beim Aufstieg zurückgesetzt)
-  get crystalPrice() { return this.baseCps.mulN(7200 * Math.pow(1.15, this.crystalBuys)).add(1000); }
-  buyCrystals(n = 1) {
-    let got = 0;
-    for (let i = 0; i < n && i < 1000; i++) { const p = this.crystalPrice; if (p.gt(this.cookies)) break; this.cookies = this.cookies.sub(p); this.crystals++; this.crystalBuys++; got++; }
-    return got;
-  }
-  buyCrystal(id) {
-    const it = CRYSTAL_SHOP.find((c) => c.id === id); if (!it || this.crystals < it.cost) return null;
-    this.crystals -= it.cost; const now = Date.now(); const rw = this.gReward; let msg;
-    if (id === 'warp1' || id === 'warp24') { const g = this.baseCps.mulN((id === 'warp1' ? 3600 : 86400) * rw).add(13); this.earn(g); msg = { text: `⏩ ${it.name}`, gain: g }; }
-    else if (id === 'golden') { for (let k = 0; k < 3; k++) this.spawnGolden(null); msg = { text: '🌟 3 goldene Kekse erscheinen' }; }
-    else if (id === 'frenzy') { this.buffs.push({ type: 'frenzy', mult: this.gFrenzy, until: now + 77000 * this.gDur }); msg = { text: '🔥 Raserei aktiv' }; }
-    else { this.buffs.push({ type: 'click', mult: 777, until: now + 13000 * this.gDur }); msg = { text: '👆 Klick-Raserei aktiv' }; }
-    return msg;
-  }
-
   // ---- Erfolge ----
   checkAchievements() {
     this.ensureDaily();
-    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber(), crystals: this.crystals, sgold: this.sgold, minOwned: Math.min(...this.owned) };
+    const s = { newKinds: this.owned.slice(BASE_COUNT).filter((n) => n > 0).length, newOwned: this.owned.slice(BASE_COUNT).reduce((a, b) => a + b, 0), sing: this.sing, seriesTotal: this.seriesTotal, owned: this.owned, totalAll: this.totalReset.add(this.total).toNumber(), cps: this.baseCps.toNumber(), clicks: this.clicks, golden: this.golden, upgradeCount: this.upgradeCount, ascensions: this.ascensions, chipsEarned: this.chipsEarned.toNumber(), hours: (Date.now() - this.start) / 3.6e6, sgold: this.sgold, minOwned: Math.min(...this.owned) };
     const fresh = [];
     for (const a of ACH) if (!this.ach[a.id] && a.test(s)) { this.ach[a.id] = 1; fresh.push(a); }
     if (fresh.length) this.updateCps();
@@ -450,7 +429,7 @@ export class Game {
   serialize() {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
-      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals, crystalBuys: this.crystalBuys, sgold: this.sgold,
+      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, sgold: this.sgold,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
@@ -464,7 +443,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals)); this.crystalBuys = Math.floor(num(d.crystalBuys)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
+    this.sing = Math.floor(num(d.sing)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
     this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
