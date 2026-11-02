@@ -233,3 +233,13 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(ACH.some((a) => a.name === 'Halloween-Jäger 13' && g.ach[a.id]), 'Saison-Erfolg');
   console.log('Saison-Test OK');
 }
+
+// ---- Zeitkristalle kaufen ----
+{
+  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e12); g.total = g.cookies;
+  const p0 = N(g.crystalPrice); assert.equal(g.buyCrystals(1), 1); assert.equal(g.crystals, 1); assert.ok(N(g.crystalPrice) > p0 * 1.1, 'Preis steigt');
+  const n = g.buyCrystals(1000); assert.ok(n > 1 && g.crystals === 1 + n, 'Max kaufen'); assert.equal(g.buyCrystals(1), 0, 'kein Geld mehr');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystalBuys, g.crystalBuys, 'Speichern/Laden');
+  g.cookies = B(1e30); g.total = g.cookies; g.ascend(); assert.equal(g.crystalBuys, 0, 'Preis nach Aufstieg zurückgesetzt');
+  console.log('Kristall-Kauf-Test OK');
+}
