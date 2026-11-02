@@ -357,20 +357,20 @@ async function renderCloud() {
       <label>Name<input type="text" id="lName" maxlength="16" autocomplete="username" value="${esc(game.name === 'Dein' ? '' : game.name)}"></label>
       <label>Passwort<input type="password" id="lPass" autocomplete="current-password"></label>
       <details id="lSetupBox"><summary class="note">Admin-Erstanmeldung (nur beim allerersten Mal für reservierte Admin-Namen)</summary><label>Setup-Code<input type="password" id="lSetup" autocomplete="off"></label></details>
-      <div class="rowf"><button type="submit" id="lGo" data-mode="register" class="adm-go">🆕 Konto erstellen</button><button type="submit" id="lIn" data-mode="login">🔑 Anmelden</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
+      <div class="rowf"><button type="submit" id="lGo" data-mode="register" class="adm-go">🆕 Konto erstellen</button><button type="submit" id="lFresh" data-mode="fresh" title="Neues Konto mit leerem Spielstand – dein jetziger Fortschritt bleibt in deinem anderen Konto">👥 Zweitkonto (neu starten)</button><button type="submit" id="lIn" data-mode="login">🔑 Anmelden</button><button type="button" id="lGuest">Ohne Anmeldung spielen</button></div>
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></form>`;
     $('#lGuest').addEventListener('click', () => { ls.set('cc_guest', '1'); modal.close(); });
     $('#loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault(); const mode = (e.submitter && e.submitter.dataset.mode) || 'login'; $('#lGo').disabled = true; $('#lIn').disabled = true; msg(mode === 'register' ? 'Konto wird erstellt…' : 'Anmelden…');
+      e.preventDefault(); const rawMode = (e.submitter && e.submitter.dataset.mode) || 'login'; const fresh = rawMode === 'fresh'; const mode = fresh ? 'register' : rawMode; $('#lGo').disabled = true; $('#lFresh').disabled = true; $('#lIn').disabled = true; msg(mode === 'register' ? 'Konto wird erstellt…' : 'Anmelden…');
       try {
         const r = await cloud.login($('#lName').value, $('#lPass').value, mode);
-        if (r.isNew) { game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
+        if (r.isNew) { if (fresh) { game.hardReset(); lastKey = ''; } game.name = cloud.name; try { await cloudSave(false, $('#lSetup').value); } catch (er) { cloud.logout(); if (er.data && er.data.needSetup) $('#lSetupBox').open = true; throw er; } toast(`✅ Konto „${esc(cloud.name)}“ erstellt – Fortschritt wird gespeichert`); }
         else { game.load(r.data); game.name = cloud.name; saveLocal(); lastKey = ''; toast(`✅ Willkommen zurück, ${esc(cloud.name)}!`); }
         $('#bakeryName').textContent = game.name; updateCloudBtn(); checkAdmin(); startEvents(); modal.close();
-      } catch (err) { if (err.data && err.data.banned) { showBanScreen(err.data.reason || ''); return; } msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lIn').disabled = false; }
+      } catch (err) { if (err.data && err.data.banned) { showBanScreen(err.data.reason || ''); return; } msg('❌ ' + err.message + (err.data && err.data.detail ? ` (${err.data.detail})` : '')); $('#lGo').disabled = false; $('#lFresh').disabled = false; $('#lIn').disabled = false; }
     });
   } else {
-    body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.</p>
+    body.innerHTML = `<div class="stack"><p>Angemeldet als <b>${esc(cloud.name)}</b>. Dein Fortschritt wird automatisch alle 30 Sekunden in der Datenbank gespeichert.<br>👥 <b>Zweitkonto?</b> Melde dich ab und tippe dann auf „Zweitkonto (neu starten)“ – es bekommt einen leeren Spielstand. Mit „Anmelden“ wechselst du jederzeit zurück.</p>
       <div class="rowf"><button id="cSave">☁️⬆️ Jetzt speichern</button><button id="cLoad">☁️⬇️ Aus Cloud laden</button><button id="cOut">🚪 Abmelden</button></div>
       <div id="cMsg" class="note"></div><h3>🏆 Rangliste</h3><div id="lb">Lade…</div></div>`;
     $('#cSave').addEventListener('click', async () => { try { await cloudSave(); msg('Gespeichert ✔'); loadLb(); } catch (e) { msg('❌ ' + e.message); } });
