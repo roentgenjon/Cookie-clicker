@@ -510,6 +510,10 @@ updateCloudBtn();
 // ---------- Hauptschleife ----------
 let prev = performance.now(); let lastWall = Date.now(); let saveT = 0; let cloudT = 0; let slowT = 0; let histT = 0; let autoT = 0; hist.sample(game);
 function frame(now) {
+  // Ein Fehler in einem Durchlauf darf die Anzeige nie einfrieren: immer weiterlaufen
+  try { frameBody(now); } catch (e) { console.error('frame', e); } finally { requestAnimationFrame(frame); }
+}
+function frameBody(now) {
   const dt = Math.min(1, (now - prev) / 1000); prev = now;
   // Tab war im Hintergrund/Gerät im Standby: verpasste Zeit gutschreiben
   const wall = Date.now(); const gap = (wall - lastWall) / 1000; lastWall = wall;
@@ -532,7 +536,6 @@ function frame(now) {
   if (saveT >= 1) { saveT = 0; const newAch = game.checkAchievements(); if (newAch.length) sound.achievement(); for (const a of newAch) toast(`🏆 <b>${esc(a.name)}</b><br>${esc(a.desc)}`);
     $('#dailyBadge').textContent = game.claimableCount() || ''; applySkin(); applySounds(); if (modalKind === 'daily') renderModal(); if (modalKind === 'mega') { const k = megaStateKey(game); if (k !== megaKey) { megaKey = k; renderModal(); } } $('#achBadge').textContent = game.achCount() || ''; if (modalKind === 'stats') renderModal(); }
   if (cloud.loggedIn && cloudT >= 180) { cloudT = 0; cloudSave().catch(() => {}); }
-  requestAnimationFrame(frame);
 }
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applySeason();
