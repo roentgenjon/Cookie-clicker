@@ -3,18 +3,19 @@
 const LN10 = Math.LN10;
 export const EMAX = 1e300; // technische Schutzgrenze für den Exponenten, damit nie Infinity/NaN entsteht
 
+// Zahlenbereich: Exponenten über ~9·10^15 sind als Double nicht mehr genau (jede Addition ginge verloren, die Kekse „frieren ein“).
+// Darum wird der Logarithmus jeder Menge ab T_COMP = 10^12 sanft gestaucht: L' = T·(1 + log10(L / T)). Dadurch bleibt jeder Exponent unter LC_MAX (~2,9·10^14),
+// ist als Double auf Nachkommastellen genau, und mehr Produktion bedeutet immer noch mehr (die Funktion steigt stetig).
+export const T_COMP = 1e12;
+export const compressLog = (L) => (L <= T_COMP ? L : T_COMP * (1 + Math.log10(L / T_COMP)));
+export const expandLog = (Lc) => (Lc <= T_COMP ? Lc : T_COMP * Math.pow(10, Lc / T_COMP - 1));
+export const LC_MAX = compressLog(1e300);
+
 export class Big {
   constructor(m, e) { this.m = m; this.e = e; }
-  // err: Rest einer Exponenten-Addition, die als Double nicht mehr darstellbar war (siehe addE) – wird in die Mantisse gefaltet
-  static norm(m, e, err = 0) {
+  static norm(m, e) {
     if (!(m > 0)) return ZERO;
-    if (err !== 0) m *= Math.pow(10, Math.max(-300, Math.min(300, err)));
     if (!Number.isFinite(m)) return new Big(1, EMAX);
-    if (e + 1 === e) { // Exponent so riesig, dass +1 verloren geht: Mantisse darf über 10 wachsen (Spielraum bis zur halben Lücke zwischen zwei Exponenten, max. 10^300), statt ewig von 10 auf 1 zurückzuspringen
-      const room = Math.min(300, Math.pow(2, Math.floor(Math.log2(e)) - 53));
-      if (m > Math.pow(10, room)) m = Math.pow(10, room);
-      return new Big(m, e < EMAX ? e : EMAX);
-    }
     if (m >= 10 || m < 1) { const k = Math.floor(Math.log10(m)); m /= Math.pow(10, k); e += k; if (m >= 10) { m /= 10; e++; } else if (m < 1) { m *= 10; e--; } }
     return new Big(m, e < EMAX ? e : EMAX); // (NaN fällt ebenfalls auf EMAX)
   }
@@ -58,21 +59,22 @@ export class Big {
     const d = this.e - o.e; if (d > 16) return this;
     return Big.norm(this.m - o.m * Math.pow(10, -d), this.e);
   }
-  mul(o) { o = Big.from(o); if (this.m === 0 || o.m === 0) return ZERO; const [e, err] = addE(this.e, o.e); return Big.norm(this.m * o.m, e, err); }
+  mul(o) { o = Big.from(o); return this.m === 0 || o.m === 0 ? ZERO : Big.norm(this.m * o.m, this.e + o.e); }
   mulN(x) { return x === 1 ? this : Big.norm(this.m * x, this.e); }
-  mulLog(l) { if (this.m === 0 || l === 0) return this; const k = Math.floor(l); const [e, err] = addE(this.e, k); return Big.norm(this.m * Math.pow(10, l - k), e, err); }
-  div(o) { o = Big.from(o); if (this.m === 0 || o.m === 0) return ZERO; const [e, err] = addE(this.e, -o.e); return Big.norm(this.m / o.m, e, err); }
+  mulLog(l) { if (this.m === 0 || l === 0) return this; const k = Math.floor(l); return Big.norm(this.m * Math.pow(10, l - k), this.e + k); }
+  div(o) { o = Big.from(o); return this.m === 0 || o.m === 0 ? ZERO : Big.norm(this.m / o.m, this.e - o.e); }
   divN(x) { return Big.norm(this.m / x, this.e); }
   min(o) { o = Big.from(o); return this.cmp(o) <= 0 ? this : o; }
   max(o) { o = Big.from(o); return this.cmp(o) >= 0 ? this : o; }
   floor() { return this.e >= 15 ? this : Big.from(Math.floor(this.toNumber())); }
-  clamp() { return this; } // keine Obergrenze mehr (bleibt für ältere Aufrufe)
+  clamp() { return this.e > LC_MAX ? new Big(9.999999999, LC_MAX) : this; } // Obergrenze des gestauchten Bereichs (siehe compressLog)
+  // gestauchte Darstellung (Spielwerte) <-> echter Logarithmus (für die Preisformeln)
+  compress() { const L = this.log10(); return L <= T_COMP ? this : Big.fromLog(Math.min(compressLog(L), LC_MAX)); }
+  expand() { const L = this.log10(); return L <= T_COMP ? this : Big.fromLog(Math.min(expandLog(L), 1e300)); }
   // Exponent immer ausgeschrieben (nie "1e+21"-Schreibweise), damit parse() ihn wieder lesen kann
   toString() { return this.m === 0 ? '0' : `${this.m.toPrecision(15)}e${this.e.toLocaleString('fullwide', { useGrouping: false })}`; }
   toJSON() { return this.toString(); }
 }
-// a + b als Double plus der exakte Rest (Two-Sum): bei Exponenten über 2^53 geht sonst jede kleine Addition verloren
-function addE(a, b) { const s = a + b; const bb = s - a; return [s, (a - (s - bb)) + (b - bb)]; }
 export const ZERO = new Big(0, 0);
 export const ONE = new Big(1, 0);
 export const B = (x) => Big.from(x);
@@ -110,7 +112,7 @@ const sci = (b) => {
 export function fmtBig(x) {
   const b = Big.from(x);
   if (b.m === 0) return '0';
-  if (b.e >= 1e9) return 'e' + sci(Big.from(b.log10())) + (b.e + 1 === b.e ? ' ×' + fmtBig(Big.from(b.m)) : '');
+  if (b.e >= 1e9) { const L = b.log10(); return L < 1e15 ? 'e' + Math.floor(L).toLocaleString('de-DE') : 'e' + sci(Big.from(L)); } // ab e-Kette: Exponent ausgeschrieben, damit jede Veränderung sichtbar ist
   if (b.e < 6) { const n = Number(b.toNumber().toPrecision(12)); return (n < 100 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString('de-DE')).replace(/\.0$/, ''); }
   const k = Math.floor(b.e / 3);
   if (k >= SFX.length) return sci(b);

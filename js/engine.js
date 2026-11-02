@@ -117,8 +117,8 @@ export class Game {
   }
   get seriesTotal() { let t = 0; for (const n of this.series) t += n; return t; }
   seriesVisible(i) { const s = SERIES[i]; return s.kind === 'bld' ? this.owned[s.b] >= s.need : this.totalReset.add(this.total).gte(s.baked); }
-  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n).mulLog(this.priceLog); }
-  seriesMax(i, budget = this.cookies) { return seriesMaxAffordable(SERIES[i], this.series[i], Big.from(budget).mulLog(-this.priceLog)); }
+  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n).mulLog(this.priceLog).compress(); }
+  seriesMax(i, budget = this.cookies) { return seriesMaxAffordable(SERIES[i], this.series[i], Big.from(budget).expand().mulLog(-this.priceLog)); }
   // n = Anzahl oder 'max'; gibt die gekauften Stufen zurück
   buySeries(i, n = 1) {
     const s = SERIES[i]; if (!s || !this.seriesVisible(i)) return 0;
@@ -177,12 +177,12 @@ export class Game {
     }
     let base = sum.mulLog(this.globalLog + MONEY_LOG).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
     if (this.sing > 0 && !base.isZero()) base = Big.fromLog(base.log10() * Math.pow(SING_POW, this.sing)); // Singularität: Produktion hoch 1,02^Stufe
-    this.baseCps = base;
+    this.baseCps = base.compress(); // Zahlenbereich stauchen (siehe big.js), damit Exponenten genau bleiben
   }
   // ---- Singularität ----
   get singAvailable() { return !this.baseCps.isZero() && this.baseCps.log10() >= SING_MIN_LOG; }
   get singDiscount() { return (this.sing >= 25 ? 0.9 : 1) * (this.sing >= 500 ? 0.75 : 1); }
-  get singCost() { return this.baseCps.mulN(SING_SECS * Math.pow(SING_COST, this.sing) * this.singDiscount); }
+  get singCost() { return this.baseCps.mulN(SING_SECS * Math.pow(SING_COST, this.sing) * this.singDiscount).compress(); }
   get singPower() { return Math.pow(SING_POW, this.sing); }
   buySing() {
     if (!this.singAvailable) return false;
@@ -202,14 +202,14 @@ export class Game {
   }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
   get cps() { return this.baseCps.mulN(this.buffMult('frenzy')).clamp(); }
-  get clickValue() { return Big.fromLog(this.clickLog + MONEY_LOG).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
+  get clickValue() { return Big.fromLog(this.clickLog + MONEY_LOG).compress().add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
   // Preisanpassung: Je mehr Kekse du insgesamt gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Gesamt-Kekse / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
   // Es zählt die Gesamtzahl (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger.
   get priceLog() { const t = this.totalReset.add(this.total); if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
-  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog); }
-  maxAffordable(i) { return geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.mulLog(-this.priceLog)); }
+  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog).compress(); }
+  maxAffordable(i) { return geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand().mulLog(-this.priceLog)); }
   buyBuilding(i, amount) {
     if (amount === 'max') amount = this.maxAffordable(i);
     if (!(amount > 0)) return false;
@@ -267,7 +267,7 @@ export class Game {
     for (let round = 0; round < 3; round++) {
       const ok = []; for (let i = 0; i < this.owned.length; i++) if (this.buildingCost(i, 1).lte(this.cookies)) ok.push(i);
       if (!ok.length) break;
-      const share = this.cookies.divN(ok.length).mulLog(-this.priceLog); let any = false;
+      const share = this.cookies.divN(ok.length).expand().mulLog(-this.priceLog); let any = false;
       for (const i of ok) { const k = Math.max(1, geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], share)); if (this.buyBuilding(i, k)) { n += k; any = true; } }
       if (!any) break;
     }
@@ -441,7 +441,7 @@ export class Game {
   // ---- Speichern ----
   serialize() {
     return {
-      v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
+      v: 2, z: 1, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
       owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, sgold: this.sgold,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
@@ -450,14 +450,16 @@ export class Game {
     const num = (x, def = 0) => (Number.isFinite(x) && x >= 0 ? x : def);
     this.hardReset();
     this.name = typeof d.name === 'string' ? d.name.slice(0, 20) : 'Dein';
-    this.cookies = Big.parse(d.cookies).clamp(); this.total = Big.parse(d.total).clamp(); this.totalReset = Big.parse(d.totalReset).clamp();
+    // z = 1: Zahlen sind schon im gestauchten Bereich (siehe big.js); ältere Spielstände mit riesigen Exponenten werden einmalig gestaucht
+    const zz = (s) => (d.z === 1 ? Big.parse(s) : Big.parse(s).compress()).clamp();
+    this.cookies = zz(d.cookies); this.total = zz(d.total); this.totalReset = zz(d.totalReset);
     this.clicks = num(d.clicks); this.golden = num(d.golden);
     if (Array.isArray(d.owned)) this.owned = BUILDINGS.map((_, i) => Math.floor(num(d.owned[i])));
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
     this.sing = Math.floor(num(d.sing)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
-    this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
+    this.ascensions = num(d.ascensions); this.chipsEarned = zz(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
     if (Array.isArray(d.series)) this.series = Array.from({ length: SERIES_COUNT }, (_, i) => { const n = Number(d.series[i]); return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), SERIES_LEVELS) : 0; });
