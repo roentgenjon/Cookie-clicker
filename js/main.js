@@ -528,7 +528,6 @@ async function checkAdmin() {
   const btn = $('#adminBtn');
   btn.classList.add('hidden'); isAdmin = false;
   if (!cloud.loggedIn) return;
-  if (ls.get('cc_adminlock_' + cloud.id)) return; // Admin-Zugang selbst dauerhaft gesperrt
   try { const r = await cloud.admin('whoami'); if (r.admin) { btn.classList.remove('hidden'); isAdmin = true; } } catch { /* kein Admin */ }
 }
 $('#adminBtn').addEventListener('click', () => openModal('admin'));

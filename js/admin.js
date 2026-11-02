@@ -28,7 +28,7 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot'], ['timewarp', '⏩ Zeitsprung'], ['chain', '⛓️ Kettenreaktion']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['lock', '🔒 Zugang sperren'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['lock', '🛡️ Konto schützen'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
 const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog', 'maint', 'sus', 'lock'];
 const LOG_TAB = ['adminlog', '🧾 Admin-Protokoll']; // nur für Entity_2806 (der Server prüft das ebenfalls)
 // Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
@@ -198,7 +198,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
         return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
       }
-      case 'lock': return `<div class="adm-sec danger-zone"><h4>🔒 Admin-Zugang dauerhaft sperren</h4><div class="adm-hint">Wenn du das hier bestätigst, kannst du das Admin-Panel mit <b>diesem Konto nie wieder</b> benutzen. Das lässt sich <b>nicht rückgängig machen</b> – auch nicht von anderen Admins. Dein Konto und dein Spielstand bleiben ganz normal.</div><div class="adm-btns"><button class="danger" data-act="selfLock">🔒 Meinen Admin-Zugang für immer sperren</button></div></div>`;
+      case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b>.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>`;
       case 'bk': {
         if (all) return '<div class="adm-hint">Sicherungen gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         if (!bkItems) return '<div class="adm-empty">Lade…</div>';
@@ -360,16 +360,11 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'susBan': { if (!(await askConfirm('Diesen Spieler wirklich sperren?'))) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
       case 'bkReload': { await loadBk(); return paint(); }
       case 'bkRestore': { if (!(await askConfirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).'))) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
-      case 'selfLock': {
-        if (!(await askConfirm('Admin-Zugang wirklich DAUERHAFT sperren? Das kann nicht rückgängig gemacht werden.', 'Weiter'))) return;
-        if (!(await askConfirm('Letzte Rückfrage: Danach kommst du mit diesem Konto nie wieder ins Admin-Panel. Wirklich sperren?', 'Für immer sperren'))) return;
-        try { await cloud.admin('selfLock', { confirm: 'SPERREN' }); } catch (e) {
-          if (e.message === 'Unbekannte Aktion') { try { localStorage.setItem('cc_adminlock_' + cloud.id, '1'); } catch { /* egal */ } toast('🔒 Gesperrt – vorerst nur auf diesem Gerät (der Server kennt die Funktion noch nicht)'); }
-          else { say(e.message, false); return paint(); }
-        }
-        try { localStorage.setItem('cc_adminlock_' + cloud.id, '1'); } catch { /* egal */ }
-        const bt = document.querySelector('#adminBtn'); if (bt) bt.classList.add('hidden');
-        toast('🔒 Dein Admin-Zugang ist jetzt dauerhaft gesperrt'); try { document.querySelector('#modal').close(); } catch { /* egal */ } return;
+      case 'selfShield': {
+        if (!(await askConfirm('Dein Konto DAUERHAFT vor dem Admin-Panel schützen? Danach kann niemand mehr (auch du nicht) per Admin-Panel Einfluss darauf nehmen. Das kann nicht rückgängig gemacht werden.', 'Weiter'))) return;
+        if (!(await askConfirm('Letzte Rückfrage: Wirklich für immer schützen? Du behältst dein Admin-Panel für andere Spieler.', 'Für immer schützen'))) return;
+        try { await cloud.admin('selfShield', { confirm: 'SCHUETZEN' }); } catch (e) { say(e.message === 'Unbekannte Aktion' ? 'Der Server kennt diese Funktion noch nicht (Update steht aus) – der Schutz wurde NICHT gesetzt.' : e.message, false); return paint(); }
+        say('🛡️ Dein Konto ist jetzt dauerhaft geschützt.'); return paint();
       }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
