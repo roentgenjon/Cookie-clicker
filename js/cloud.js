@@ -27,6 +27,7 @@ async function req(path, opts) {
 }
 const post = (path, method, body, extra = {}) => req(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...extra });
 
+const SCOPED_KEYS = ['cookie_clicker_save_v1', 'cc_friends', 'cc_hist', 'cc_bc', 'cc_poll_seen', 'cc_poll_notified'];
 export const cloud = {
   enabled: !!API_URL,
   get id() { return ls.get('cc_id'); },
@@ -57,11 +58,17 @@ export const cloud = {
   logout() { ls.del('cc_id'); ls.del('cc_secret'); ls.del('cc_name'); },
 
   // ---- Mehrere Konten auf diesem Gerät: Zugangsdaten (der abgeleitete Schlüssel, nie das Passwort) liegen lokal, Wechsel ohne Passwort ----
+  // Lokale Daten je Konto getrennt: Spielstand, Verlauf, Freunde, Abruf-Zeiger … liegen unter „<Schlüssel>@<Konto-ID>“. Ohne Anmeldung (Gast) und für das erste Konto bleibt der alte Schlüssel gültig.
+  scoped(key) { return this.id ? `${key}@${this.id}` : key; },
+  scopedGet(key) { const v = ls.get(this.scoped(key)); return v !== null || this.accounts().length > 1 ? v : ls.get(key); },
+  scopedSet(key, v) { ls.set(this.scoped(key), v); },
+  // Vor dem Konto-Wechsel: das bisherige (alte, gemeinsame) Zeug dem aktuellen Konto zuordnen
+  claimLegacy() { if (!this.id) return; for (const k of SCOPED_KEYS) { const sk = this.scoped(k); if (ls.get(sk) === null) { const v = ls.get(k); if (v !== null) ls.set(sk, v); } } },
   accounts() { try { const l = JSON.parse(ls.get('cc_accounts') || '[]'); return Array.isArray(l) ? l.filter((a) => a && a.id && a.secret && a.name) : []; } catch { return []; } },
   saveAccounts(list) { ls.set('cc_accounts', JSON.stringify(list.slice(0, 12))); },
   remember() { if (!this.loggedIn) return; const l = this.accounts().filter((a) => a.id !== this.id); l.unshift({ name: this.name, id: this.id, secret: this.secret }); this.saveAccounts(l); },
   forget(id) { this.saveAccounts(this.accounts().filter((a) => a.id !== id)); },
-  switchTo(acc) { ls.set('cc_id', acc.id); ls.set('cc_secret', acc.secret); ls.set('cc_name', acc.name); this.remember(); },
+  switchTo(acc) { this.claimLegacy(); ls.set('cc_id', acc.id); ls.set('cc_secret', acc.secret); ls.set('cc_name', acc.name); this.remember(); },
   // Zweitkonto ohne eigenes Passwort: ein zufälliges Passwort wird erzeugt, nur der abgeleitete Schlüssel bleibt auf dem Gerät. Das Konto wird erst durch das erste Speichern angelegt.
   async prepareSecondary(name) {
     name = name.trim();

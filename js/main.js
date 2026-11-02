@@ -39,9 +39,9 @@ function toast(html) {
 
 // ---------- Speichern ----------
 const KEY = 'cookie_clicker_save_v1';
-function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(game.serialize())); } catch { /* ignore */ } }
+function saveLocal() { try { localStorage.setItem(cloud.scoped(KEY), JSON.stringify(game.serialize())); } catch { /* ignore */ } }
 function loadLocal() {
-  const raw = ls.get(KEY); if (!raw) return;
+  const raw = cloud.scopedGet(KEY); if (!raw) return;
   try { const d = JSON.parse(raw); localLast = d.last || 0; const r = game.load(d); if (!r.gain.isZero()) toast(`Willkommen zurück! Offline (${fmtTime(r.offlineSecs)}) gebacken: <b>${fmt(r.gain)}</b> Kekse`); } catch (e) { console.error(e); }
 }
 loadLocal();
@@ -308,7 +308,7 @@ function renderModal() {
   else if (modalKind === 'mega') renderMega($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { lastKey = ''; saveLocal(); }, buySound: () => sound.buy() });
   else if (modalKind === 'sounds') renderSoundShop($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => saveLocal(), buySound: () => sound.shop(), apply: applySounds, preview: (kind, id) => (kind === 'pack' ? sound.previewPack(id) : sound.previewTrack(id)) });
   else if (modalKind === 'skins') renderSkins($('#modalBody'), { game, toast, title: (t) => { $('#modalTitle').textContent = t; }, changed: () => { applySkin(); saveLocal(); } });
-  else if (modalKind === 'polls') renderPolls($('#modalBody'), { toast, title: (t) => { $('#modalTitle').textContent = t; }, onSeen: (id) => { ls.set('cc_poll_seen', id); $('#pollBadge').textContent = ''; } });
+  else if (modalKind === 'polls') renderPolls($('#modalBody'), { toast, title: (t) => { $('#modalTitle').textContent = t; }, onSeen: (id) => { cloud.scopedSet('cc_poll_seen', id); $('#pollBadge').textContent = ''; } });
   else if (modalKind === 'gift') renderGift($('#modalBody'), { game, fmt, toast, title: (t) => { $('#modalTitle').textContent = t; }, save: () => cloudSave() });
   else if (modalKind === 'guild') renderGuild($('#modalBody'), { fmt, toast, title: (t) => { $('#modalTitle').textContent = t; } });
   else if (modalKind === 'chat') chat.render($('#modalBody'), (t) => { $('#modalTitle').textContent = t; });
@@ -320,10 +320,11 @@ async function switchAccount(acc, fresh) {
   const prev = { id: cloud.id, secret: cloud.secret, name: cloud.name };
   try {
     try { await cloudSave(); } catch { /* weiter */ }
+    saveLocal(); // Stand des bisherigen Kontos lokal sichern, bevor gewechselt wird
     cloud.switchTo(acc);
     if (fresh) { game.hardReset(); game.name = acc.name; await cloudSave(false); } // legt das neue Konto an
     else { const r = await cloud.load(); if (r.data) game.load(r.data); game.name = cloud.name; }
-    $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); updateCloudBtn(); checkAdmin(); startEvents();
+    $('#bakeryName').textContent = game.name; lastKey = ''; saveLocal(); hist.reload(); updateCloudBtn(); checkAdmin(); startEvents();
     toast(`👤 Jetzt als <b>${esc(acc.name)}</b> unterwegs`); return true;
   } catch (e) {
     if (prev.id) { cloud.switchTo(prev); try { const r = await cloud.load(); if (r.data) game.load(r.data); game.name = cloud.name; lastKey = ''; saveLocal(); $('#bakeryName').textContent = game.name; } catch { /* egal */ } } // zurück zum bisherigen Konto samt Spielstand
@@ -485,9 +486,9 @@ function handleEvent(ev, from) {
 }
 // Neue Umfrage: Abzeichen am Knopf und einmaliger Hinweis oben
 function pollHint(poll) {
-  if (!poll || poll.id === ls.get('cc_poll_seen')) { $('#pollBadge').textContent = ''; return; }
+  if (!poll || poll.id === cloud.scopedGet('cc_poll_seen')) { $('#pollBadge').textContent = ''; return; }
   $('#pollBadge').textContent = '!';
-  if (ls.get('cc_poll_notified') !== poll.id) { ls.set('cc_poll_notified', poll.id); sound.message(); banner({ title: '📊 Neue Umfrage', text: poll.q, icon: '📊', modal: 'polls' }); }
+  if (cloud.scopedGet('cc_poll_notified') !== poll.id) { cloud.scopedSet('cc_poll_notified', poll.id); sound.message(); banner({ title: '📊 Neue Umfrage', text: poll.q, icon: '📊', modal: 'polls' }); }
 }
 // Wartungsmodus: Leiste oben; Cloud-Funktionen pausieren, Spielen bleibt möglich
 let maintOn = false;
@@ -506,9 +507,9 @@ async function cloudReload() {
 async function pollEvents() {
   if (!cloud.loggedIn || banned) return;
   try {
-    const since = Number(ls.get('cc_bc')) || 0;
+    const since = Number(cloud.scopedGet('cc_bc')) || 0;
     const r = await cloud.events(since);
-    ls.set('cc_bc', String(r.now)); setMaint(r.maint); if (r.season !== undefined) { seasonSrv = r.season; applySeason(); } if (r.reload) await cloudReload();
+    cloud.scopedSet('cc_bc', String(r.now)); setMaint(r.maint); if (r.season !== undefined) { seasonSrv = r.season; applySeason(); } if (r.reload) await cloudReload();
     for (const ev of r.events || []) handleEvent(ev, ev.from);
     pollHint(r.poll);
     for (const bc of r.broadcasts || []) { if (bc.text) showMessage(bc.from, bc.text); if (bc.event) handleEvent(bc.event, bc.from); }
@@ -517,10 +518,12 @@ async function pollEvents() {
 }
 let evTimer = null;
 function startEvents() {
-  if (!ls.get('cc_bc')) ls.set('cc_bc', String(Date.now()));
+  if (!cloud.scopedGet('cc_bc')) cloud.scopedSet('cc_bc', String(Date.now()));
   if (!evTimer) evTimer = setInterval(pollEvents, 20000);
   pollEvents();
 }
+// Einmalig: alle lokal gesetzten Admin-Sperren (aus der ersten Version der Selbstsperre) aufheben
+if (!ls.get('cc_adminlock_reset1')) { try { Object.keys(localStorage).filter((k) => k.startsWith('cc_adminlock_')).forEach((k) => localStorage.removeItem(k)); } catch { /* egal */ } ls.set('cc_adminlock_reset1', '1'); }
 async function checkAdmin() {
   const btn = $('#adminBtn');
   btn.classList.add('hidden'); isAdmin = false;

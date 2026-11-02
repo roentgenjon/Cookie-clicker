@@ -1,7 +1,8 @@
 // Freundesliste: nur auf diesem Gerät gespeichert (localStorage). Freunde erscheinen im Geschenk-Fenster und beim Starten eines privaten Chats.
+import { cloud } from './cloud.js';
 const KEY = 'cc_friends';
-const read = () => { try { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(a) ? a.filter((n) => typeof n === 'string').slice(0, 100) : []; } catch { return []; } };
-const write = (a) => { try { localStorage.setItem(KEY, JSON.stringify(a)); } catch { /* egal */ } };
+const read = () => { try { const a = JSON.parse(cloud.scopedGet(KEY) || '[]'); return Array.isArray(a) ? a.filter((n) => typeof n === 'string').slice(0, 100) : []; } catch { return []; } };
+const write = (a) => { try { cloud.scopedSet(KEY, JSON.stringify(a)); } catch { /* egal */ } };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const friends = {
   list: () => read(),
