@@ -116,7 +116,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   for (let i = 0; i < 5; i++) g.earn(g.cps.mulN(1e6));
   g.click();
   for (const v of [g.baseCps, g.cps, g.clickValue, g.cookies, g.total]) assert.ok(Number.isFinite(v.log10()) && Number.isFinite(v.e), 'endlich: ' + v);
-  assert.ok(g.cookies.e > 99999999999, 'Kekse wachsen über 1e11 hinaus'); assert.equal(fmtBig(B('9.99e99999999999')), 'e1,00e11'); assert.equal(fmtBig(B('9.999e500')), '1,00e501'); assert.equal(fmtBig(B('1.5e99999999')), '1,50e99999999'); assert.equal(fmtBig(B('1.23e1234567890')), 'e1,23e9'); assert.equal(fmtBig(B('1e1000000000')), 'e1,00e9'); assert.equal(fmtBig(B('5e300000000000')), 'e3,00e11');
+  assert.ok(g.cookies.e > 99999999999, 'Kekse wachsen über 1e11 hinaus'); assert.equal(fmtBig(B('9.99e99999999999')), 'e99.999.999.999'); assert.equal(fmtBig(B('9.999e500')), '1,00e501'); assert.equal(fmtBig(B('1.5e99999999')), '1,50e99999999'); assert.equal(fmtBig(B('1.23e1234567890')), 'e1.234.567.890'); assert.equal(fmtBig(B('1e1000000000')), 'e1.000.000.000'); assert.equal(fmtBig(B('5e300000000000')), 'e300.000.000.000'); assert.equal(fmtBig(B('2e5000000000000000')), 'e5,00e15');
   const g2 = new Game(); g2.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(g2.cookies.toString(), g.cookies.toString(), 'Speichern/Laden über 1e308');
   // Preise und Kauf jenseits von 1e308
   const h = new Game(); h.owned[5] = 8000; h.cookies = B('1e600'); h.total = B(1); h.recalc();
@@ -147,7 +147,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 
 // ---- Singularität: endlose Stufen ----
 {
-  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(100000000000000); g.recalc();
+  const g = new Game(); g.owned.fill(1e6); g.bought.fill(1); g.series.fill(1000000000); g.recalc();
   assert.ok(g.singAvailable && g.baseCps.log10() > 100);
   const l0 = g.baseCps.log10(); g.cookies = B('1e5'); assert.equal(g.buySing(), false, 'zu teuer');
   g.cookies = g.singCost.mulN(2); assert.ok(g.buySing() && g.sing === 1);
@@ -167,7 +167,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(TOTAL_ALL > 34n * 10n ** 46n); assert.ok(SERIES_LEVELS > 4.99e44 && SERIES_LEVELS < 5.01e44); assert.equal(TOTAL_ALL_TEXT, '3,50e47'); assert.equal(fmtUp(5e44), '500 Dc'); assert.equal(fmtUp(123456), '123.456'); assert.equal(fmtUp(5e22), '50 Trd');
   const g = new Game(); g.owned[0] = 20; g.recalc(); g.cookies = B('1e' + '9'.repeat(45)); g.total = g.cookies; // Exponent ~1e45: genug für alle Stufen
   const t0 = Date.now(); const got = g.buySeries(0, 'max'); assert.ok(Date.now() - t0 < 2000, 'keine Endlosschleife');
-  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e41, 'Produktion wächst mit 5·10^44 Stufen');
+  assert.equal(g.series[0], SERIES_LEVELS, 'Reihe komplett gekauft: ' + got); assert.ok(Number.isFinite(g.baseCps.log10()) && g.baseCps.log10() > 1e13, 'Produktion wächst mit 5·10^44 Stufen');
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.series[0], SERIES_LEVELS, 'Speichern/Laden');
   const b = new Game(); b.owned.fill(100); b.recalc(); b.cookies = B('1e' + '9'.repeat(45)); b.total = b.cookies; assert.ok(b.buyAllSeries() > 1e40, '„Alle kaufen“ mit riesigen Stufen');
   console.log('10^47-Upgrades-Test OK');
@@ -236,18 +236,21 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Bonus-Test OK');
 }
 
-// ---- Riesige Exponenten (über 2^53): Zahlen wachsen weiter statt zu springen ----
+// ---- Gestauchter Zahlenbereich: Exponenten bleiben genau, Kekse steigen immer ----
 {
-  const { Big, fmtBig } = await import('../js/big.js');
-  let c = Big.norm(3.1, 8.5e42); const p = Big.norm(3.1, 8.5e42); let last = c.m;
-  for (let i = 0; i < 40; i++) { c = c.add(p.mulN(0.5)); assert.ok(c.m > last, 'wächst weiter (' + i + ')'); last = c.m; }
-  assert.ok(c.e === 8.5e42 && c.m > 20, 'Mantisse über 10 erlaubt'); assert.ok(fmtBig(c).includes('×'), 'Anzeige zeigt Mantisse: ' + fmtBig(c));
-  const m1 = Big.norm(2, 8.5e42).mul(Big.from(5)); assert.ok(Math.abs(m1.m - 10) < 1e-9 && m1.e === 8.5e42, 'Mal 5 geht nicht verloren: ' + m1.m);
-  const m2 = Big.norm(2, 8.5e42).mulLog(3); assert.ok(Math.abs(m2.m - 2000) < 1e-6, 'Mal 10^3 geht nicht verloren: ' + m2.m);
-  assert.ok(Big.norm(2, 8.5e42).cmp(Big.norm(9, 8.4e42)) > 0, 'größerer Exponent bleibt größer');
-  assert.equal(Big.parse(c.toString()).m.toPrecision(10), c.m.toPrecision(10), 'Speichern/Laden');
-  const n = Big.norm(5, 1e10); assert.equal(n.mulLog(2).m, 5, 'normaler Bereich unverändert'); assert.equal(n.mulLog(2).e, 1e10 + 2); assert.equal(Big.norm(5, 12).mul(Big.from(3)).toString().slice(0, 4), '1.50');
-  console.log('Big-Sättigung-Test OK');
+  const { Big, fmtBig, compressLog, expandLog, LC_MAX, T_COMP } = await import('../js/big.js');
+  assert.equal(compressLog(5e11), 5e11, 'unter 1e12 unverändert'); assert.ok(LC_MAX < 9e15, 'Exponenten bleiben als Double genau');
+  let last = 0; for (const L of [1e12, 1e13, 1e20, 1e43, 1e100, 1e299]) { const c = compressLog(L); assert.ok(c > last, 'steigt stetig'); last = c; assert.ok(Math.abs(expandLog(c) / L - 1) < 1e-9, 'Umkehrung ' + L); }
+  // riesige Spielstände werden auf den genauen Bereich gestaucht (Kekse e8,5e42 -> weit unter 2^53)
+  const g = new Game(); g.owned.fill(4.57e43); g.sing = 100; g.series.fill(1.66e44); g.recalc();
+  assert.ok(g.baseCps.log10() > T_COMP && g.baseCps.log10() < LC_MAX, 'Produktion gestaucht: ' + g.baseCps.log10());
+  g.cookies = Big.fromLog(g.baseCps.log10() + 5); g.total = g.cookies; const c0 = g.cookies; g.tick(1);
+  assert.ok(g.cookies.cmp(c0) > 0, 'Kekse steigen weiter (auch mit riesigen Exponenten)');
+  const g2 = new Game(); g2.load(JSON.parse(JSON.stringify({ ...g.serialize(), cookies: '1e8.5e42'.replace('1e8.5e42', '1.5e8500000000000000000000000000000000000000000') }))); assert.ok(g2.cookies.log10() <= LC_MAX + 1, 'riesiger Spielstand wird beim Laden gestaucht');
+  assert.ok(!fmtBig(g.cookies).includes('×'), 'keine Mantisse mehr in der Anzeige'); assert.ok(/^e[\d.]+$/.test(fmtBig(g.cookies)), 'Anzeige: ' + fmtBig(g.cookies));
+  // Kauf bei gestauchten Preisen funktioniert
+  const h = new Game(); h.owned.fill(1e30); h.recalc(); h.cookies = Big.fromLog(LC_MAX); h.total = h.cookies; assert.ok(h.maxAffordable(0) > 1e10, 'Max-Kauf bei riesigen Zahlen: ' + h.maxAffordable(0)); assert.ok(h.buyBuilding(0, 'max'));
+  console.log('Stauchungs-Test OK');
 }
 
 // ---- Preisanpassung nach Gesamt-Kekse ----

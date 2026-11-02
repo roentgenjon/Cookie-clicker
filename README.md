@@ -60,3 +60,6 @@ python3 -m http.server 8000   # dann http://localhost:8000
 
 ## Sprache
 In den Optionen gibt es „Sprache / Language“. Die Oberfläche (Menüs, Knöpfe, Fenster, die wichtigsten Hinweise) ist auf Englisch verfügbar. Namen von Gebäuden, Upgrades und Erfolgen sowie Chat-Texte und das Admin-Panel bleiben deutsch.
+
+## Zahlenbereich
+Exponenten über ~9·10^15 sind in Computerzahlen nicht mehr genau (Kekse „frieren ein“). Darum wird der Logarithmus jeder Menge ab 10^12 sanft gestaucht (`compressLog` in `js/big.js`). So bleiben alle Exponenten genau, die Kekse steigen immer weiter, und große Exponenten werden ausgeschrieben (z. B. `e33.824.699.650.833`). Ältere Spielstände werden beim ersten Laden einmalig gestaucht.
