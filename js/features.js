@@ -149,10 +149,10 @@ export async function renderGuild(body, { fmt, toast, title }) {
   title('🏰 Gilde');
   if (!cloud.loggedIn) { body.innerHTML = '<p class="note">Melde dich an (☁️), um einer Gilde beizutreten oder eine zu gründen.</p>'; return; }
   const pw = (sl) => fmt(Big.fromLog(Math.max(0, sl)));
-  const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { toast('❌ ' + e.message); } paint(); };
+  const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { toast('❌ ' + (e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Der Server kennt Gilden noch nicht (Update steht aus)' : e.message)); } paint(); };
   let timer = 0;
   async function paint() {
-    let me; try { me = (await cloud.guild('me')).guild; } catch (e) { body.innerHTML = `<p class="note">❌ ${esc(e.message)}</p>`; return; }
+    let me; try { me = (await cloud.guild('me')).guild; } catch (e) { body.innerHTML = `<p class="note">❌ ${esc(e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Gilden gibt es noch nicht auf dem Server – der Cloudflare-Worker muss einmal neu veröffentlicht werden (Update steht aus). Bis dahin kannst du keiner Gilde beitreten.' : e.message)}</p>`; return; }
     if (!body.isConnected) return;
     if (me) {
       title(`🏰 ${me.name} [${me.tag}]`);
