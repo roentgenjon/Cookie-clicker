@@ -252,3 +252,17 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(h.clickValue.log10() > 99.9, 'Klickwert ×1e100');
   console.log('Admin-Kristalle/Bonus-Test OK');
 }
+
+// ---- Riesige Exponenten (über 2^53): Zahlen wachsen weiter statt zu springen ----
+{
+  const { Big, fmtBig } = await import('../js/big.js');
+  let c = Big.norm(3.1, 8.5e42); const p = Big.norm(3.1, 8.5e42); let last = c.m;
+  for (let i = 0; i < 40; i++) { c = c.add(p.mulN(0.5)); assert.ok(c.m > last, 'wächst weiter (' + i + ')'); last = c.m; }
+  assert.ok(c.e === 8.5e42 && c.m > 20, 'Mantisse über 10 erlaubt'); assert.ok(fmtBig(c).includes('×'), 'Anzeige zeigt Mantisse: ' + fmtBig(c));
+  const m1 = Big.norm(2, 8.5e42).mul(Big.from(5)); assert.ok(Math.abs(m1.m - 10) < 1e-9 && m1.e === 8.5e42, 'Mal 5 geht nicht verloren: ' + m1.m);
+  const m2 = Big.norm(2, 8.5e42).mulLog(3); assert.ok(Math.abs(m2.m - 2000) < 1e-6, 'Mal 10^3 geht nicht verloren: ' + m2.m);
+  assert.ok(Big.norm(2, 8.5e42).cmp(Big.norm(9, 8.4e42)) > 0, 'größerer Exponent bleibt größer');
+  assert.equal(Big.parse(c.toString()).m.toPrecision(10), c.m.toPrecision(10), 'Speichern/Laden');
+  const n = Big.norm(5, 1e10); assert.equal(n.mulLog(2).m, 5, 'normaler Bereich unverändert'); assert.equal(n.mulLog(2).e, 1e10 + 2); assert.equal(Big.norm(5, 12).mul(Big.from(3)).toString().slice(0, 4), '1.50');
+  console.log('Big-Sättigung-Test OK');
+}
