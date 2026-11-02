@@ -1,7 +1,7 @@
 // Fenster für tägliche Aufgaben, Keks-Skins und Geschenke.
 import { SKINS, TASK_INFO, SOUND_PACKS, MUSIC_TRACKS } from './extras.js';
 import { cloud } from './cloud.js';
-import { SING_MILESTONES, CRYSTAL_SHOP } from './engine.js';
+import { SING_MILESTONES } from './engine.js';
 import { SERIES, SERIES_LEVELS, TOTAL_ALL_TEXT, fmtUp, seriesDesc, seriesNeedText, seriesCost, seriesMaxAffordable, seriesFactor } from './mega.js';
 import { parseBig } from './admin.js';
 import { Big } from './big.js';
@@ -86,9 +86,9 @@ export function renderSoundShop(body, { game, fmt, toast, title, changed, buySou
 
 // ---- Mega-Upgrades: 100 Reihen mit je ~5·10^44 Stufen ----
 let megaAmt = 1; // 1 / 10 / 100 / 1000 / 'max'
-const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, seriesMaxAffordable(SERIES[i], game.series[i], game.cookies)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
+const megaN = (i, game) => (megaAmt === 'max' ? Math.max(1, game.seriesMax(i)) : Math.min(megaAmt, SERIES_LEVELS - game.series[i]));
 const big = (n) => BigInt(Math.floor(n)).toLocaleString('de-DE');
-export function megaStateKey(game) { return game.series.join() + megaAmt + game.sing + (game.singAvailable && game.cookies.gte(game.singCost) ? 's' : '-') + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies.gte(seriesCost(SERIES[i], game.series[i], megaN(i, game))) ? 2 : 1) : 0)).join(''); }
+export function megaStateKey(game) { return game.series.join() + megaAmt + game.sing + (game.singAvailable && game.cookies.gte(game.singCost) ? 's' : '-') + SERIES.map((_, i) => (game.seriesVisible(i) ? (game.cookies.gte(game.seriesPrice(i, megaN(i, game))) ? 2 : 1) : 0)).join(''); }
 
 function singCard(game, fmt) {
   const l = game.sing;
@@ -107,7 +107,7 @@ export function renderMega(body, { game, fmt, toast, title, changed, buySound })
     <p class="note">Jede Reihe hat knapp <b>5·10⁴⁴ Stufen</b>, die du nacheinander kaufst. Jede Stufe erhöht die Wirkung etwas, wird aber auch teurer. Die Reihen gehören zu den normalen Upgrades und werden beim Aufstieg zurückgesetzt. Du hast ${fmt(game.cookies)} 🍪</p>
     <div class="items">${singCard(game, fmt)}</div>
     <div class="items">${vis.map((i) => {
-      const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = seriesCost(s, have, n); const can = game.cookies.gte(cost);
+      const s = SERIES[i]; const have = game.series[i]; const n = megaN(i, game); const cost = game.seriesPrice(i, n); const can = game.cookies.gte(cost);
       return `<div class="item ${have ? 'has' : ''}"><div class="ie">${s.icon}<small class="ib">${s.badge}</small></div><div class="in"><b>${s.name}</b><div class="ip">${seriesDesc(s).split(': ').pop()}</div><div class="have">Stufe <b>${fmtUp(have)}</b>${have ? ` · aktuell ×${fmt(seriesFactor(s, have))}` : ''}</div></div><button data-mg="${i}" ${can ? '' : 'disabled'}>${n > 1 ? `${n.toLocaleString('de-DE')}× ` : ''}🍪 ${fmt(cost)}</button></div>`;
     }).join('') || '<div class="adm-empty">Noch keine Reihe freigeschaltet. Kaufe Gebäude!</div>'}</div>
     ${locked.length ? `<div class="adm-sec"><h4>🔒 ${locked.length} weitere Reihen gesperrt</h4>${locked.slice(0, 5).map((i) => `<div class="adm-sched"><span>${SERIES[i].icon}</span><span>${SERIES[i].name}</span><span class="note">${seriesNeedText(SERIES[i])}</span></div>`).join('')}</div>` : ''}</div>`;
@@ -140,25 +140,6 @@ export async function renderPolls(body, { title, toast, onSeen }) {
     }));
   };
   load();
-}
-
-
-// ---------- Zeitkristalle ----------
-export function renderTime(body, { game, fmt, toast, title }) {
-  title('⏳ Zeitkristalle');
-  const paint = () => {
-    body.innerHTML = `<div class="shop-top"><div><b>⏳ ${game.crystals.toLocaleString('de-DE')} Zeitkristalle</b><div class="note">Du bekommst sie bei jedem Aufstieg (1 + eine Stelle je 10× so vielen Himmelschips) – oder kaufst sie mit Keksen.</div></div></div>
-      <div class="adm-sec"><h4>🍪 Zeitkristalle kaufen</h4><div class="adm-sched"><span>⏳ 1 Kristall</span><span class="note">${fmt(game.crystalPrice)} Kekse</span><button data-buy="1" ${game.cookies.gte(game.crystalPrice) ? '' : 'disabled'}>Kaufen</button></div><div class="adm-btns wrap"><button data-buy="10">×10</button><button data-buy="100">×100</button><button data-buy="1000">Max</button></div><small class="adm-small">Der Preis steigt mit jedem Kauf um 15 % und fällt beim Aufstieg zurück.</small></div>
-      <div class="stack">${CRYSTAL_SHOP.map((c) => `<div class="adm-sched"><span>${c.icon}</span><span>${c.name}</span><button data-id="${c.id}" ${game.crystals >= c.cost ? '' : 'disabled'}>⏳ ${c.cost}</button></div>`).join('')}</div>`;
-  };
-  paint();
-  body.onclick = (e) => {
-    const bb = e.target.closest('button[data-buy]');
-    if (bb) { const n = game.buyCrystals(+bb.dataset.buy); toast(n ? `⏳ <b>+${n}</b> Zeitkristall${n > 1 ? 'e' : ''} gekauft` : '❌ Nicht genug Kekse'); paint(); return; }
-    const b = e.target.closest('button[data-id]'); if (!b) return;
-    const m = game.buyCrystal(b.dataset.id); if (!m) return;
-    toast(`⏳ <b>${m.text}</b>${m.gain ? ` +${fmt(m.gain)} Kekse` : ''}`); paint();
-  };
 }
 
 

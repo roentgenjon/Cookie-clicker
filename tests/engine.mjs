@@ -97,8 +97,8 @@ import('../js/mega.js').then(({ SERIES, SERIES_LEVELS, TOTAL_ALL }) => {
   const bad = new Game(); bad.load({ v: 2, series: ['x', -5, 1e60, 3] }); assert.deepEqual(bad.series.slice(0, 4), [0, 0, SERIES_LEVELS, 3]);
 });
 // „Alle kaufen“ mit Mega-Reihen
-const ba = new Game(); ba.owned.fill(100); ba.recalc(); ba.total = B(1e15); ba.cookies = B(1e12); const baBefore = N(ba.cps);
-const baN = ba.buyAllSeries(); assert.ok(baN > 100, `Mega-Stufen gekauft: ${baN}`); assert.ok(N(ba.cps) > baBefore); assert.ok(N(ba.cookies) >= 0 && N(ba.cookies) < 1e12 * 0.5, 'Großteil des Guthabens ausgegeben');
+const ba = new Game(); ba.owned.fill(100); ba.recalc(); ba.total = B(1e15); ba.cookies = B(1e15); const baBefore = N(ba.cps);
+const baN = ba.buyAllSeries(); assert.ok(baN > 100, `Mega-Stufen gekauft: ${baN}`); assert.ok(N(ba.cps) > baBefore); assert.ok(N(ba.cookies) >= 0 && N(ba.cookies) < 1e15 * 0.5, 'Großteil des Guthabens ausgegeben');
 assert.ok(ba.series.filter((n) => n > 0).length > 20, 'verteilt auf viele Reihen');
 const bb = new Game(); bb.cookies = B(5); assert.equal(bb.buyAllSeries(), 0);
 console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toString());
@@ -119,10 +119,10 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(g.cookies.e > 99999999999, 'Kekse wachsen über 1e11 hinaus'); assert.equal(fmtBig(B('9.99e99999999999')), 'e1,00e11'); assert.equal(fmtBig(B('9.999e500')), '1,00e501'); assert.equal(fmtBig(B('1.5e99999999')), '1,50e99999999'); assert.equal(fmtBig(B('1.23e1234567890')), 'e1,23e9'); assert.equal(fmtBig(B('1e1000000000')), 'e1,00e9'); assert.equal(fmtBig(B('5e300000000000')), 'e3,00e11');
   const g2 = new Game(); g2.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(g2.cookies.toString(), g.cookies.toString(), 'Speichern/Laden über 1e308');
   // Preise und Kauf jenseits von 1e308
-  const h = new Game(); h.owned[5] = 8000; h.cookies = B('1e600'); h.total = B('1e600'); h.recalc();
+  const h = new Game(); h.owned[5] = 8000; h.cookies = B('1e600'); h.total = B(1); h.recalc();
   const mxb = h.maxAffordable(5); assert.ok(mxb > 1000, 'Gebäude über 1e308 Preis: ' + mxb);
   assert.ok(h.buyBuilding(5, 'max') && h.owned[5] === 8000 + mxb && h.cookies.lt(B('1e600')));
-  const m = new Game(); m.owned[0] = 20; m.recalc(); m.cookies = B('1e900'); m.total = B('1e900');
+  const m = new Game(); m.owned[0] = 20; m.recalc(); m.cookies = B('1e900'); m.total = B(1);
   const got = m.buySeries(0, 'max'); assert.ok(got > 1e5 && m.cookies.gte(0), 'Mega-Stufen: ' + got);
   assert.ok(Number.isFinite(m.baseCps.log10()));
   const i2 = new Game(); i2.cookies = B('1e900'); 
@@ -179,7 +179,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.equal(BUILDINGS.length, 115); assert.equal(BASE_COUNT, 15); assert.equal(new Set(BUILDINGS.map((b) => b.name)).size, 115, 'Namen eindeutig');
   for (let i = 1; i < BUILDINGS.length; i++) assert.ok(BUILDINGS[i].base > BUILDINGS[i - 1].base && BUILDINGS[i].cps > BUILDINGS[i - 1].cps, 'Preis und Produktion steigen: ' + i);
   assert.equal(SERIES.length, SERIES_COUNT); assert.equal(SERIES[100].kind, 'bld'); assert.equal(SERIES[100].b, 15); assert.equal(SERIES[SERIES_COUNT - 1].b, 114); assert.equal(SERIES[200].tier, 1); assert.equal(SERIES[SERIES_COUNT - 1].tier, 5); assert.equal(SERIES[SERIES_COUNT - 1].need, 500);
-  const g = new Game(); g.cookies = B(BUILDINGS[15].base * 20); g.total = g.cookies;
+  const g = new Game(); g.cookies = B(BUILDINGS[15].base * 20); g.total = B(1);
   assert.equal(g.buyBuilding(15, 5), true); assert.equal(g.owned[15], 5); assert.ok(N(g.baseCps) >= BUILDINGS[15].cps * 5 * 0.999, 'neues Gebäude produziert');
   assert.equal(g.seriesVisible(100), false, 'Reihe braucht 10 Gebäude'); g.owned[15] = 10; assert.equal(g.seriesVisible(100), true);
   g.owned[114] = 1; g.recalc(); assert.ok(g.baseCps.log10() > 90, 'Gebäude 115 liefert riesige Produktion');
@@ -209,17 +209,11 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Gebäude-Nachricht-Test OK');
 }
 
-// ---- Zeitkristalle & neue goldene Effekte ----
+// ---- neue goldene Effekte ----
 {
-  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e18); g.total = g.cookies;
-  assert.equal(g.crystals, 0); assert.equal(g.ascend(), true); assert.ok(g.crystals >= 1, 'Aufstieg gibt Kristalle');
-  g.crystals = 30; g.owned[0] = 10; g.recalc(); const c0 = N(g.cookies);
-  assert.ok(g.buyCrystal('warp1').gain, 'Zeitsprung'); assert.ok(N(g.cookies) > c0 && g.crystals === 27);
-  g.crystals = 20; assert.equal(g.buyCrystal('warp24'), null, 'zu wenig Kristalle'); g.crystals = 27; g.buyCrystal('golden'); assert.equal(g.gcs.length, 3);
-  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystals, g.crystals, 'Kristalle werden gespeichert');
   for (const eff of ['timewarp', 'chain']) { const h = new Game(); h.owned[0] = 10; h.recalc(); const id = h.spawnGolden(eff).id; const m = h.clickGolden(id); assert.equal(m.kind, eff); }
   const h2 = new Game(); const id2 = h2.spawnGolden('chain').id; h2.clickGolden(id2); assert.equal(h2.gcs.length, 3, 'Kettenreaktion ruft 3 Kekse');
-  console.log('Zeitkristall-Test OK');
+  console.log('Goldene-Effekte-Test OK');
 }
 
 // ---- Saison-Events ----
@@ -234,23 +228,12 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Saison-Test OK');
 }
 
-// ---- Zeitkristalle kaufen ----
-{
-  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B('1e110'); g.total = g.cookies;
-  const p0 = N(g.crystalPrice); assert.equal(g.buyCrystals(1), 1); assert.equal(g.crystals, 1); assert.ok(N(g.crystalPrice) > p0 * 1.1, 'Preis steigt');
-  const n = g.buyCrystals(1000); assert.ok(n > 1 && g.crystals === 1 + n, 'Max kaufen'); assert.equal(g.buyCrystals(1), 0, 'kein Geld mehr');
-  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystalBuys, g.crystalBuys, 'Speichern/Laden');
-  g.cookies = B('1e140'); g.total = g.cookies; g.ascend(); assert.equal(g.crystalBuys, 0, 'Preis nach Aufstieg zurückgesetzt');
-  console.log('Kristall-Kauf-Test OK');
-}
 
-// ---- Admin: Zeitkristalle geben & Kekse-Bonus ×10^28 ----
+// ---- Kekse-Bonus ×10^100 ----
 {
-  const g = new Game(); assert.ok(String(g.applyEvent({ type: 'message', text: '🎁cry:25' })).includes('25')); assert.equal(g.crystals, 25);
-  g.applyEvent({ type: 'message', text: '🎁cry:0' }); assert.equal(g.crystals, 25, '0 wird ignoriert');
   const h = new Game(); h.owned[0] = 1; h.recalc(); assert.ok(h.baseCps.log10() > 98.9 && h.baseCps.log10() < 101.5, 'Produktion ×1e100: ' + h.baseCps.log10());
   assert.ok(h.clickValue.log10() > 99.9, 'Klickwert ×1e100');
-  console.log('Admin-Kristalle/Bonus-Test OK');
+  console.log('Bonus-Test OK');
 }
 
 // ---- Riesige Exponenten (über 2^53): Zahlen wachsen weiter statt zu springen ----
@@ -265,4 +248,16 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.equal(Big.parse(c.toString()).m.toPrecision(10), c.m.toPrecision(10), 'Speichern/Laden');
   const n = Big.norm(5, 1e10); assert.equal(n.mulLog(2).m, 5, 'normaler Bereich unverändert'); assert.equal(n.mulLog(2).e, 1e10 + 2); assert.equal(Big.norm(5, 12).mul(Big.from(3)).toString().slice(0, 4), '1.50');
   console.log('Big-Sättigung-Test OK');
+}
+
+// ---- Preisanpassung nach Gesamt-Kekse ----
+{
+  const { PRICE_EXP } = await import('../js/engine.js');
+  const g = new Game(); g.total = B(1e5); const c0 = g.buildingCost(3, 1); assert.equal(g.priceLog, 0, 'unter 1 Mio keine Anpassung');
+  g.total = B(1e12); const c1 = g.buildingCost(3, 1); assert.ok(Math.abs(c1.log10() - c0.log10() - 6 * PRICE_EXP) < 1e-9, 'Faktor (1e12/1e6)^PRICE_EXP');
+  g.total = B(1e24); assert.ok(g.buildingCost(3, 1).log10() > c1.log10(), 'mit mehr Kekse teurer');
+  g.cookies = B(1e3); g.total = B(1e24); const hi = g.buildingCost(3, 1); g.cookies = B(1); assert.equal(g.buildingCost(3, 1).cmp(hi), 0, 'Ausgeben macht nichts billiger (zählt Gesamt, nicht Guthaben)');
+  const s = new Game(); s.owned[0] = 20; s.recalc(); s.total = B(1e12); const sp = s.seriesPrice(0, 1); s.total = B(1); assert.ok(sp.log10() > s.seriesPrice(0, 1).log10() + 1.4, 'Mega-Stufen auch angepasst');
+  const m = new Game(); m.total = B(1e12); m.cookies = m.buildingCost(0, 5).mulN(1.001); assert.equal(m.maxAffordable(0), 5, 'Max-Kauf passt zum angepassten Preis');
+  console.log('Preisanpassung-Test OK');
 }

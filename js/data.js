@@ -255,7 +255,7 @@ export function buildAchievements() {
   [75, 90].forEach((n) => add(`Weltenbummler ${n}`, `${n} verschiedene neue Gebäude besitzen`, '🧭', (s) => s.newKinds >= n));
   [1e8, 1e10, 1e12, 1e15].forEach((n) => add(`Bauherr ${fmtShort(n)}`, `${fmtShort(n)} neue Gebäude insgesamt besitzen`, '🏗️', (s) => s.newOwned >= n));
   [1, 10, 100, 1000].forEach((n) => add(`Vollständig ${n}`, `Von jedem der 115 Gebäude mindestens ${n} besitzen`, '🏛️', (s) => s.minOwned >= n));
-  [1, 10, 50, 100, 500, 1000].forEach((n) => add(`Zeitreisender ${n}`, `${n} Zeitkristalle ⏳ besitzen`, '⏳', (s) => s.crystals >= n));
+  [1, 10, 24, 100, 500, 1000].forEach((n) => add(`Ausdauer ${n} h`, `${n} Stunden Spielzeit`, '⏳', (s) => s.hours >= n));
   // Saison-Erfolge (nur während des jeweiligen Events erspielbar)
   for (const [id, nm] of Object.entries(SEASON_NAMES)) [13, 77].forEach((n) => add(`${nm.split(' ')[0]}-Jäger ${n}`, `${n} goldene Kekse während des ${nm}-Events anklicken`, nm.split(' ')[1], (s) => (s.sgold[id] || 0) >= n));
   return a;
