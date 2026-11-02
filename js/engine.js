@@ -261,6 +261,19 @@ export class Game {
     return true;
   }
   // heaven=true: himmlische Upgrades (Chips), sonst Cookie-Upgrades; kind = null oder Typ-Nummer
+  // Auto-Kauf: bezahlbare Upgrades, dann Gebäude (das Guthaben wird auf alle bezahlbaren Gebäude verteilt, jeweils so viele wie möglich auf einmal), optional Mega-Stufen
+  autoBuy(withSeries = false) {
+    let n = this.buyAllAffordable(false);
+    for (let round = 0; round < 3; round++) {
+      const ok = []; for (let i = 0; i < this.owned.length; i++) if (this.buildingCost(i, 1).lte(this.cookies)) ok.push(i);
+      if (!ok.length) break;
+      const share = this.cookies.divN(ok.length).mulLog(-this.priceLog); let any = false;
+      for (const i of ok) { const k = Math.max(1, geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], share)); if (this.buyBuilding(i, k)) { n += k; any = true; } }
+      if (!any) break;
+    }
+    if (withSeries) n += this.buyAllSeries();
+    return n;
+  }
   buyAllAffordable(heaven = false, kind = null) {
     const order = heaven ? ORDER_HEAVEN : ORDER_COOKIE; let n = 0; let cn = this.cookies.toNumber(); let av = this.chipsAvailable.toNumber();
     for (let i = 0; i < order.length; i++) {
