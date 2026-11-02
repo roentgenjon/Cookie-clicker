@@ -123,6 +123,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         <div class="adm-quick"><span>Vorlagen:</span><button data-act="preset" data-k="frenzy" data-m="7" data-s="77">Kekse ×7 · 77 s</button><button data-act="preset" data-k="frenzy" data-m="100" data-s="600">Kekse ×100 · 10 min</button><button data-act="preset" data-k="click" data-m="777" data-s="13">Klick ×777 · 13 s</button><button data-act="preset" data-k="click" data-m="10000" data-s="60">Klick ×10.000 · 1 min</button></div>`;
       case 'give': return `
         <div class="adm-sec"><h4>🍪 Kekse</h4><div class="adm-grid">${fld('Menge', '<input type="text" id="cAmt" value="1 mio" placeholder="z. B. 1 mio, 5e9, 10k">', 'k, mio, mrd, bio, 5e9 …')}<div class="adm-btns"><button data-act="cGive">➕ Geben</button><button data-act="cTake">➖ Abziehen</button></div></div></div>
+        <div class="adm-sec"><h4>⏳ Zeitkristalle</h4><div class="adm-grid">${fld('Anzahl', '<input type="number" id="crAmt" min="1" max="999999999" value="10">')}<div class="adm-btns"><button data-act="crystals">Kristalle geben</button></div></div></div>
         <div class="adm-sec"><h4>😇 Himmelschips</h4><div class="adm-grid">${fld('Anzahl', '<input type="number" id="chAmt" min="1" value="10">')}<div class="adm-btns"><button data-act="chips">Chips geben</button></div></div></div>
         <div class="adm-sec"><h4>🏭 Gebäude</h4><div class="adm-grid3">${fld('Gebäude', `<select id="bSel"><optgroup label="Klassisch">${BUILDINGS.slice(0, BASE_COUNT).map((b, i) => `<option value="${i}">${b.icon} ${esc(b.name)}</option>`).join('')}</optgroup><optgroup label="Neue Gebäude (${BUILDINGS.length - BASE_COUNT})">${BUILDINGS.slice(BASE_COUNT).map((b, i) => `<option value="${i + BASE_COUNT}">${b.icon} ${esc(b.name)}</option>`).join('')}</optgroup></select>`)}${fld('Anzahl', '<input type="number" id="bAmt" min="1" max="100000" value="10">', 'bis 100.000')}<div class="adm-btns"><button data-act="building">Geben</button></div></div></div>`;
       case 'up': return `
@@ -275,6 +276,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         const n = parseBig(val('#cAmt')); if (n.isZero()) { say('Ungültige Zahl (z. B. 1 mio, 5e9, 10k)', false); return paint(); }
         return send({ type: 'cookies', amount: (act === 'cGive' ? '' : '-') + n.toString() }, `${act === 'cGive' ? '+' : '−'}${fmt(n)} Kekse`);
       }
+      case 'crystals': { const n = intIn('#crAmt', 1, 999999999, 1); return send({ type: 'message', text: `🎁cry:${n}` }, `${n.toLocaleString('de-DE')} Zeitkristalle`); }
       case 'chips': return send({ type: 'chips', amount: intIn('#chAmt', 1, 1e9, 1) }, `${intIn('#chAmt', 1, 1e9, 1)} Chips`);
       case 'building': {
         const bi = intIn('#bSel', 0, BUILDINGS.length - 1, 0), am = intIn('#bAmt', 1, 100000, 1);

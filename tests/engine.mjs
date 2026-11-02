@@ -32,7 +32,7 @@ assert.ok(g4.ascend() && N(g4.chipsEarned) === 2 && g4.cookies.isZero());
 const g5 = new Game(); g5.owned[0] = 1; g5.total = B(5); g5.clicks = 1;
 assert.ok(g5.checkAchievements().length >= 2);
 // Goldener Keks
-const g6 = new Game(); g6.nextGolden = 0; g6.tick(1); assert.equal(g6.gcs.length, 1); assert.ok(g6.clickGolden(g6.gcs[0].id)); assert.equal(g6.gcs.length, 0);
+const g6 = new Game(); g6.nextGolden = 0; g6.tick(1); assert.equal(g6.gcs.length, 1); g6.gcs[0].effect = 'lucky'; assert.ok(g6.clickGolden(g6.gcs[0].id)); assert.equal(g6.gcs.length, 0);
 // Admin-Ereignisse
 const g9 = new Game(); g9.owned[1] = 5; g9.recalc();
 g9.applyEvent({ type: 'golden', effect: 'lucky', count: 3 }); assert.ok(g9.gcs.length === 3 && g9.gcs[0].effect === 'lucky');
@@ -236,10 +236,19 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 
 // ---- Zeitkristalle kaufen ----
 {
-  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e12); g.total = g.cookies;
+  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e40); g.total = g.cookies;
   const p0 = N(g.crystalPrice); assert.equal(g.buyCrystals(1), 1); assert.equal(g.crystals, 1); assert.ok(N(g.crystalPrice) > p0 * 1.1, 'Preis steigt');
   const n = g.buyCrystals(1000); assert.ok(n > 1 && g.crystals === 1 + n, 'Max kaufen'); assert.equal(g.buyCrystals(1), 0, 'kein Geld mehr');
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystalBuys, g.crystalBuys, 'Speichern/Laden');
   g.cookies = B(1e30); g.total = g.cookies; g.ascend(); assert.equal(g.crystalBuys, 0, 'Preis nach Aufstieg zurückgesetzt');
   console.log('Kristall-Kauf-Test OK');
+}
+
+// ---- Admin: Zeitkristalle geben & Kekse-Bonus ×10^28 ----
+{
+  const g = new Game(); assert.ok(String(g.applyEvent({ type: 'message', text: '🎁cry:25' })).includes('25')); assert.equal(g.crystals, 25);
+  g.applyEvent({ type: 'message', text: '🎁cry:0' }); assert.equal(g.crystals, 25, '0 wird ignoriert');
+  const h = new Game(); h.owned[0] = 1; h.recalc(); assert.ok(h.baseCps.log10() > 26.9 && h.baseCps.log10() < 29.5, 'Produktion ×1e28: ' + h.baseCps.log10());
+  assert.ok(h.clickValue.log10() > 27.9, 'Klickwert ×1e28');
+  console.log('Admin-Kristalle/Bonus-Test OK');
 }

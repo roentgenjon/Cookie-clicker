@@ -49,6 +49,8 @@ function unpackBits(str, len) {
   return rawUnpack(str.startsWith('b:') ? str.slice(2) : str, len);
 }
 
+// Kekse-Bonus: alle Einnahmen (Produktion und Klicks) ×10^28
+export const MONEY_LOG = 28;
 export const CRYSTAL_SHOP = [
   { id: 'warp1', icon: '⏩', name: 'Zeitsprung: 1 Stunde Produktion', cost: 3 },
   { id: 'warp24', icon: '⏭️', name: 'Großer Zeitsprung: 24 Stunden Produktion', cost: 25 },
@@ -177,7 +179,7 @@ export class Game {
       for (let o = 0; o < w.length; o++) if (w[o]) syn += w[o] * this.owned[o];
       sum = sum.add(Big.from(BUILDINGS[b].cps * this.owned[b] * syn).mulLog(this.tierLog[b]));
     }
-    let base = sum.mulLog(this.globalLog).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
+    let base = sum.mulLog(this.globalLog + MONEY_LOG).mul(Big.from(1).add(this.chipsEarned.mulN(0.01))).mulN(1 + 0.002 * this.achCount());
     if (this.sing > 0 && !base.isZero()) base = Big.fromLog(base.log10() * Math.pow(SING_POW, this.sing)); // Singularität: Produktion hoch 1,02^Stufe
     this.baseCps = base;
   }
@@ -204,7 +206,7 @@ export class Game {
   }
   buffMult(type) { let m = 1; const t = Date.now(); for (const b of this.buffs) if (b.type === type && b.until > t) m *= b.mult; return m; }
   get cps() { return this.baseCps.mulN(this.buffMult('frenzy')).clamp(); }
-  get clickValue() { return Big.fromLog(this.clickLog).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
+  get clickValue() { return Big.fromLog(this.clickLog + MONEY_LOG).add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
   buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount); }
@@ -386,6 +388,8 @@ export class Game {
         // Gebäude-Geschenk als Nachricht verpackt („🎁bld:<Nr.>:<Anzahl>“): funktioniert auch mit älteren Servern, die nur die ersten 15 Gebäude als eigenes Ereignis kennen
         const m = /^🎁bld:(\d{1,3}):(\d{1,6})$/.exec(String(ev.text || ''));
         if (m && +m[1] < BUILDINGS.length && +m[2] >= 1 && +m[2] <= 100000) { this.owned[+m[1]] += +m[2]; this.updateCps(); return `+${m[2]}× ${BUILDINGS[+m[1]].name}!`; }
+        const c = /^🎁cry:(\d{1,9})$/.exec(String(ev.text || '')); // Zeitkristall-Geschenk (ebenfalls als Nachricht verpackt)
+        if (c && +c[1] >= 1) { this.crystals += +c[1]; return `+${(+c[1]).toLocaleString('de-DE')} Zeitkristalle ⏳!`; }
         return ev.text;
       }
       case 'reset': { const n = this.name; this.hardReset(); this.name = n; return 'Dein Spielstand wurde zurückgesetzt.'; }
