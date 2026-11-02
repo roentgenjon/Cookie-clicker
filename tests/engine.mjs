@@ -229,10 +229,13 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 }
 
 
-// ---- Kekse-Bonus ×10^100 ----
+// ---- Kekse-Bonus ×10^100 (ein-/ausschaltbar) ----
 {
-  const h = new Game(); h.owned[0] = 1; h.recalc(); assert.ok(h.baseCps.log10() > 98.9 && h.baseCps.log10() < 101.5, 'Produktion ×1e100: ' + h.baseCps.log10());
-  assert.ok(h.clickValue.log10() > 99.9, 'Klickwert ×1e100');
+  const h = new Game(); h.owned[0] = 1; h.recalc(); assert.equal(h.boost, false, 'neues Spiel: Bonus aus'); assert.ok(h.clickValue.log10() < 1 && h.baseCps.log10() < 0, 'ohne Bonus normale Werte');
+  h.setBoost(true); assert.ok(h.baseCps.log10() > 98.9 && h.baseCps.log10() < 101.5, 'Produktion ×1e100: ' + h.baseCps.log10()); assert.ok(h.clickValue.log10() > 99.9, 'Klickwert ×1e100');
+  const sv = new Game(); sv.load(JSON.parse(JSON.stringify(h.serialize()))); assert.equal(sv.boost, true, 'Bonus wird gespeichert');
+  const old = new Game(); const d = h.serialize(); delete d.boost; old.load(JSON.parse(JSON.stringify(d))); assert.equal(old.boost, true, 'ältere Spielstände behalten den Bonus');
+  h.hardReset(); assert.equal(h.boost, false, 'Alles löschen schaltet den Bonus aus'); assert.equal(h.clickValue.log10(), 0, 'Klick nach Neustart = 1');
   console.log('Bonus-Test OK');
 }
 
