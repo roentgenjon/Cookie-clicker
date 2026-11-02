@@ -310,7 +310,7 @@ async function admin(env, b) {
     return json(env, { items: (await env.SAVES.get('adminlog', 'json')) || [] });
   }
   const run = async () => { switch (b.action) {
-    case 'whoami': return json(env, { admin: true, name: me });
+    case 'whoami': return json(env, { admin: true, name: me, shielded: !!(await env.SAVES.get('adminshield:' + b.id)) });
     case 'shieldList': { // nur Entity_2806
       if (me.toLowerCase() !== LOG_VIEWER) return fail(env, 'Nur Entity_2806 darf den Schutz verwalten.', 403);
       const l = await env.SAVES.list({ prefix: 'adminshield:', limit: 200 }); const items = [];
@@ -325,7 +325,8 @@ async function admin(env, b) {
     case 'selfShield': { if (b.confirm !== 'SCHUETZEN') return fail(env, 'Bestätigung fehlt'); await env.SAVES.put('adminshield:' + b.id, String(Date.now())); return json(env, { ok: true }); } // endgültig: es gibt absichtlich keine Funktion zum Aufheben
     case 'players': {
       const on = new Set(await onlineIds(env));
-      const players = (await listPlayers(env)).map((p) => ({ ...p, online: on.has(p.id) })).sort((x, y) => y.score - x.score);
+      const shields = new Set((await env.SAVES.list({ prefix: 'adminshield:', limit: 500 })).keys.map((k) => k.name.slice(12)));
+      const players = (await listPlayers(env)).map((p) => ({ ...p, online: on.has(p.id), shielded: shields.has(p.id) })).sort((x, y) => y.score - x.score);
       return json(env, { players, now: Date.now() });
     }
     case 'stats': {
@@ -694,7 +695,7 @@ export default {
         const open = ((await env.SAVES.get('polls', 'json')) || []).find(pollOpen); // neueste offene Umfrage (für den Hinweis im Spiel)
         const reload = !!(await env.SAVES.get('rb:' + b.id)); if (reload) await env.SAVES.delete('rb:' + b.id);
         const season = await currentSeason(env);
-        return json(env, { events: q, broadcasts: bc, now: Date.now(), poll: open ? { id: open.id, q: open.q } : null, maint: await maintOf(env), reload, season });
+        return json(env, { events: q, broadcasts: bc, shielded, now: Date.now(), poll: open ? { id: open.id, q: open.q } : null, maint: await maintOf(env), reload, season });
       }
 
       // Chat lesen (ohne Anmeldung möglich)

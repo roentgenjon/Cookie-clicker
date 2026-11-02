@@ -55,7 +55,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
   let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
-  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let myShield = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -100,7 +100,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
-  async function loadShield() { if (!isLogViewer) return; try { shieldItems = (await cloud.admin('shieldList')).items; } catch { shieldItems = []; } }
+  async function loadShield() { try { myShield = !!(await cloud.admin('whoami')).shielded; } catch { myShield = null; } if (!isLogViewer) return; try { shieldItems = (await cloud.admin('shieldList')).items; } catch { shieldItems = []; } }
   async function loadMaint() { try { const [m, s] = await Promise.all([cloud.admin('maintGet'), cloud.admin('seasonGet')]); maintData = { maint: m.maint, season: s.season, seasons: s.seasons }; } catch (e) { maintData = { error: e.message }; } }
   async function loadSus() { try { susItems = (await cloud.admin('susList')).items; } catch { susItems = []; } }
   async function loadBk() { bkItems = null; if (!sel || sel === ALL) return; try { bkItems = (await cloud.admin('backupList', { target: sel })).items; } catch (e) { bkItems = { error: e.message }; } }
@@ -199,7 +199,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
         return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
       }
-      case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b> – nur Entity_2806 kann den Schutz aufheben.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>${isLogViewer ? `<div class="adm-sec"><h4>🛡️ Geschützte Konten (nur du kannst den Schutz aufheben)</h4>${shieldItems === null ? '<div class="adm-empty">Lade…</div>' : shieldItems.length ? shieldItems.map((x) => `<div class="adm-sched"><span>🛡️ ${esc(x.name)}</span><span></span><button data-act="shieldOff" data-id="${x.id}">Schutz aufheben</button></div>`).join('') : '<div class="adm-hint">Kein Konto ist geschützt.</div>'}</div>` : ''}`;
+      case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen – ${myShield === null ? 'Status wird geprüft…' : myShield ? '✅ ist GESCHÜTZT' : '❌ ist NICHT geschützt'}</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b> – nur Entity_2806 kann den Schutz aufheben.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>${isLogViewer ? `<div class="adm-sec"><h4>🛡️ Geschützte Konten (nur du kannst den Schutz aufheben)</h4>${shieldItems === null ? '<div class="adm-empty">Lade…</div>' : shieldItems.length ? shieldItems.map((x) => `<div class="adm-sched"><span>🛡️ ${esc(x.name)}</span><span></span><button data-act="shieldOff" data-id="${x.id}">Schutz aufheben</button></div>`).join('') : '<div class="adm-hint">Kein Konto ist geschützt.</div>'}</div>` : ''}`;
       case 'bk': {
         if (all) return '<div class="adm-hint">Sicherungen gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
         if (!bkItems) return '<div class="adm-empty">Lade…</div>';
@@ -238,7 +238,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
           <div class="adm-search"><input type="text" id="q" placeholder="🔍 Spieler suchen…" value="${esc(q)}"><button id="reload" title="Liste aktualisieren">🔄</button></div>
           <div class="adm-list">
             <div class="adm-row all ${sel === ALL ? 'sel' : ''}" data-id="${ALL}"><span class="dot on"></span><span>📣 Alle Spieler</span><span></span></div>
-            ${list.map((p) => `<div class="adm-row ${p.id === sel ? 'sel' : ''}" data-id="${p.id}"><span class="dot ${online(p) ? 'on' : ''}"></span><span>${esc(p.name)}${p.banned ? ' 🚫' : ''}${p.muted ? ' 🔇' : ''}</span><span class="sc">${fmt(p.score)}</span></div>`).join('') || '<div class="adm-empty">Keine Treffer</div>'}
+            ${list.map((p) => `<div class="adm-row ${p.id === sel ? 'sel' : ''}" data-id="${p.id}"><span class="dot ${online(p) ? 'on' : ''}"></span><span>${esc(p.name)}${p.shielded ? ' 🛡️' : ''}${p.banned ? ' 🚫' : ''}${p.muted ? ' 🔇' : ''}</span><span class="sc">${fmt(p.score)}</span></div>`).join('') || '<div class="adm-empty">Keine Treffer</div>'}
           </div>
         </aside>
         <section class="adm-main">
@@ -366,7 +366,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!(await askConfirm('Dein Konto DAUERHAFT vor dem Admin-Panel schützen? Danach kann niemand mehr (auch du nicht) per Admin-Panel Einfluss darauf nehmen. Das kann nicht rückgängig gemacht werden.', 'Weiter'))) return;
         if (!(await askConfirm('Letzte Rückfrage: Wirklich für immer schützen? Du behältst dein Admin-Panel für andere Spieler.', 'Für immer schützen'))) return;
         try { await cloud.admin('selfShield', { confirm: 'SCHUETZEN' }); } catch (e) { say(e.message === 'Unbekannte Aktion' ? 'Der Server kennt diese Funktion noch nicht (Update steht aus) – der Schutz wurde NICHT gesetzt.' : e.message, false); return paint(); }
-        say('🛡️ Dein Konto ist jetzt dauerhaft geschützt – nur Entity_2806 kann das aufheben.'); await loadShield(); return paint();
+        say('🛡️ Dein Konto ist jetzt dauerhaft geschützt – nur Entity_2806 kann das aufheben.'); await loadShield(); await refresh(); return paint();
       }
       case 'apDel': { try { await call('appealDel', { target: btn.dataset.id }); say('Einspruch gelöscht'); await loadAppeals(); } catch { return; } return paint(); }
       case 'banmsg': {
