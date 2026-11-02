@@ -25,8 +25,10 @@ async function superMap(env) { // feste Admins aus env.ADMINS (dürfen weitere A
   for (const n of (env.ADMINS || '').split(',').map((x) => x.trim()).filter(Boolean)) map[(await sha256('id:' + n.toLowerCase())).slice(0, 16)] = n;
   return map;
 }
-async function adminMap(env) { // feste + ernannte Admins
-  return { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
+async function adminMap(env) { // feste + ernannte Admins (ohne die, die ihren Zugang selbst dauerhaft gesperrt haben)
+  const map = { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
+  for (const k of (await env.SAVES.list({ prefix: 'adminlock:', limit: 500 })).keys) delete map[k.name.slice(10)];
+  return map;
 }
 const nameToId = async (name) => (await sha256('id:' + String(name).trim().toLowerCase())).slice(0, 16);
 // Online-Anzeige: höchstens alle 90 s wird ein kurzlebiger Eintrag geschrieben (spart Schreibvorgänge)
@@ -241,7 +243,7 @@ async function listPlayers(env) {
 
 // ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
 const LOG_VIEWER = 'entity_2806';
-const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'selfLock', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
 function describeEvent(e) {
   if (!e || typeof e !== 'object') return '';
   switch (e.type) {
@@ -279,6 +281,7 @@ function describeAdmin(b) {
     case 'appealDel': return 'Einspruch gelöscht';
     case 'pollShare': return 'Umfrage-Ergebnis im Chat geteilt';
     case 'guildDel': return 'Gilde aufgelöst';
+    case 'selfLock': return 'Admin-Zugang selbst dauerhaft gesperrt';
     case 'maintSet': return b.on ? `Wartungsmodus an ${q(b.msg)}` : 'Wartungsmodus aus';
     case 'backupRestore': return 'Sicherung wiederhergestellt';
     case 'susDel': return 'Verdachtsmeldung erledigt';
@@ -308,6 +311,7 @@ async function admin(env, b) {
   }
   const run = async () => { switch (b.action) {
     case 'whoami': return json(env, { admin: true, name: me });
+    case 'selfLock': { if (b.confirm !== 'SPERREN') return fail(env, 'Bestätigung fehlt'); await env.SAVES.put('adminlock:' + b.id, String(Date.now())); return json(env, { ok: true }); } // endgültig: es gibt absichtlich keine Funktion zum Aufheben
     case 'players': {
       const on = new Set(await onlineIds(env));
       const players = (await listPlayers(env)).map((p) => ({ ...p, online: on.has(p.id) })).sort((x, y) => y.score - x.score);
