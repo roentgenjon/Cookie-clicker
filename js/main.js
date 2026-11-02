@@ -324,7 +324,6 @@ function renderSettings() {
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="setLang" data-noi18n>🌐 Sprache / Language: ${i18n.lang === 'en' ? 'English' : 'Deutsch'}</button></div>
-    <div class="rowf"><button id="setBoost">💰 Kekse-Bonus ×10^100: ${game.boost ? 'an' : 'aus'}</button></div>
     <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button><label>Auto-Kauf Tempo<select id="setAutoSpeed">${AUTO_SPEEDS.map(([s, t]) => `<option value="${s}" ${s === autoEvery ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
     <details><summary>📲 Als App installieren</summary><p class="note">iPhone/iPad (Safari): Teilen-Symbol → „Zum Home-Bildschirm“. Android/Chrome: Menü → „App installieren“. Dann startet das Spiel wie eine App im Vollbild.</p></details>
     <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
@@ -340,7 +339,6 @@ function renderSettings() {
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#setLang').addEventListener('click', () => { saveLocal(); i18n.set(i18n.lang === 'en' ? 'de' : 'en'); });
   $('#setAutoSpeed').addEventListener('change', (e) => { autoEvery = Number(e.target.value); ls.set('cc_autospeed', String(autoEvery)); autoT = 0; toast('🤖 Auto-Kauf-Tempo geändert'); });
-  $('#setBoost').addEventListener('click', () => { game.setBoost(!game.boost); lastKey = ''; saveLocal(); toast(game.boost ? '💰 Kekse-Bonus an' : '💰 Kekse-Bonus aus'); renderSettings(); });
   $('#setAuto').addEventListener('click', () => setAuto(!autoBuy));
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
