@@ -1,17 +1,19 @@
 // Verlauf der gebackenen Kekse (Exponent) als Liniendiagramm in der Statistik. Alle 60 s ein Messpunkt, die letzten 360 (6 Std) bleiben auf diesem Gerät gespeichert.
 import { Big, fmtBig } from './big.js';
+import { cloud } from './cloud.js';
 const KEY = 'cc_hist'; const MAX = 360;
-const rd = () => { try { const a = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(a) ? a.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1])).slice(-MAX) : []; } catch { return []; } };
+const rd = () => { try { const a = JSON.parse(cloud.scopedGet(KEY) || '[]'); return Array.isArray(a) ? a.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1])).slice(-MAX) : []; } catch { return []; } };
 let data = rd();
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = (ms) => { const m = Math.round(ms / 60000); return m < 1 ? 'jetzt' : m < 60 ? `vor ${m} Min` : `vor ${Math.floor(m / 60)} Std ${m % 60} Min`; };
 const val = (y) => fmtBig(Big.fromLog(y));
 
 export const hist = {
+  reload() { data = rd(); }, // nach einem Konto-Wechsel den Verlauf des anderen Kontos laden
   sample(game) {
     const l = game.totalReset.add(game.total).log10(); if (!Number.isFinite(l)) return;
     data.push([Date.now(), Math.max(0, l)]); data = data.slice(-MAX);
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* egal */ }
+    try { cloud.scopedSet(KEY, JSON.stringify(data)); } catch { /* egal */ }
   },
   draw(el) {
     if (data.length < 2) { el.innerHTML = '<h4 class="hist-t">📈 Verlauf</h4><p class="note">Noch zu wenig Daten – es wird jede Minute ein Messpunkt gespeichert. Schau in ein paar Minuten wieder vorbei.</p>'; return; }

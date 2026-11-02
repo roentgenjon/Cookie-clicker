@@ -524,6 +524,7 @@ async function ensureDb(env) {
   await env.DB.exec('CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL, meta TEXT, exp INTEGER)');
   const store = new Store(env.DB);
   if (!(await store.get('_migrated'))) await migrateFromKv(env.SAVES, store); // einmalig: alte KV-Daten übernehmen
+  if (!(await store.get('_adminlock_reset1'))) { for (const k of (await store.list({ prefix: 'adminlock:', limit: 1000 })).keys) await store.delete(k.name); await store.put('_adminlock_reset1', '1'); } // einmalig: alle Admin-Selbstsperren aufheben
   await env.DB.prepare('DELETE FROM kv WHERE exp IS NOT NULL AND exp < ?1').bind(Date.now()).run(); // Abgelaufenes aufräumen
   dbReady = true;
 }
