@@ -147,11 +147,14 @@ export async function renderPolls(body, { title, toast, onSeen }) {
 export function renderTime(body, { game, fmt, toast, title }) {
   title('⏳ Zeitkristalle');
   const paint = () => {
-    body.innerHTML = `<div class="shop-top"><div><b>⏳ ${game.crystals.toLocaleString('de-DE')} Zeitkristalle</b><div class="note">Du bekommst sie bei jedem Aufstieg (1 + eine Stelle je 10× so vielen Himmelschips).</div></div></div>
+    body.innerHTML = `<div class="shop-top"><div><b>⏳ ${game.crystals.toLocaleString('de-DE')} Zeitkristalle</b><div class="note">Du bekommst sie bei jedem Aufstieg (1 + eine Stelle je 10× so vielen Himmelschips) – oder kaufst sie mit Keksen.</div></div></div>
+      <div class="adm-sec"><h4>🍪 Zeitkristalle kaufen</h4><div class="adm-sched"><span>⏳ 1 Kristall</span><span class="note">${fmt(game.crystalPrice)} Kekse</span><button data-buy="1" ${game.cookies.gte(game.crystalPrice) ? '' : 'disabled'}>Kaufen</button></div><div class="adm-btns wrap"><button data-buy="10">×10</button><button data-buy="100">×100</button><button data-buy="1000">Max</button></div><small class="adm-small">Der Preis steigt mit jedem Kauf um 15 % und fällt beim Aufstieg zurück.</small></div>
       <div class="stack">${CRYSTAL_SHOP.map((c) => `<div class="adm-sched"><span>${c.icon}</span><span>${c.name}</span><button data-id="${c.id}" ${game.crystals >= c.cost ? '' : 'disabled'}>⏳ ${c.cost}</button></div>`).join('')}</div>`;
   };
   paint();
   body.onclick = (e) => {
+    const bb = e.target.closest('button[data-buy]');
+    if (bb) { const n = game.buyCrystals(+bb.dataset.buy); toast(n ? `⏳ <b>+${n}</b> Zeitkristall${n > 1 ? 'e' : ''} gekauft` : '❌ Nicht genug Kekse'); paint(); return; }
     const b = e.target.closest('button[data-id]'); if (!b) return;
     const m = game.buyCrystal(b.dataset.id); if (!m) return;
     toast(`⏳ <b>${m.text}</b>${m.gain ? ` +${fmt(m.gain)} Kekse` : ''}`); paint();

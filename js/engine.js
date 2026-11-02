@@ -69,7 +69,7 @@ export class Game {
     this.upgradeCount = 0;
     this.ach = new Uint8Array(ACH.length);
     this.sing = 0; // Singularitäts-Stufe (bleibt beim Aufstieg)
-    this.crystals = 0; this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
+    this.crystals = 0; this.crystalBuys = 0; this.sgold = {}; this.season = ''; this.ascensions = 0; this.chipsEarned = ZERO; this.chipsSpent = 0; // Chips gesamt als Big (keine Obergrenze), ausgegebene Chips als Zahl
     this.start = Date.now(); this.last = Date.now();
     this.skin = 'classic';
     this.series = new Array(SERIES_COUNT).fill(0); // Mega-Upgrades: gekaufte Stufen je Reihe (werden beim Aufstieg zurückgesetzt)
@@ -403,7 +403,7 @@ export class Game {
   ascend() {
     const gain = this.chipsGain;
     if (gain.lt(1)) return false;
-    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++; this.crystals += 1 + Math.max(0, Math.floor(gain.log10()));
+    this.totalReset = this.totalReset.add(this.total).clamp(); this.chipsEarned = this.chipsEarned.add(gain); this.ascensions++; this.crystalBuys = 0; this.crystals += 1 + Math.max(0, Math.floor(gain.log10()));
     this.cookies = ZERO; this.total = ZERO;
     this.owned.fill(0);
     this.bought.fill(0, 0, HEAVEN_START); this.series.fill(0);
@@ -415,6 +415,13 @@ export class Game {
   setSeason(id) { id = typeof id === 'string' ? id : ''; if (id === this.season) return false; this.season = id; this.recalc(); return true; }
 
   // ---- Zeitkristalle (gibt es beim Aufstieg; werden gegen Sofort-Hilfen getauscht) ----
+  // Zeitkristalle für Kekse kaufen: 2 Stunden Produktion + 1.000, je Kauf in dieser Runde 15 % teurer (beim Aufstieg zurückgesetzt)
+  get crystalPrice() { return this.baseCps.mulN(7200 * Math.pow(1.15, this.crystalBuys)).add(1000); }
+  buyCrystals(n = 1) {
+    let got = 0;
+    for (let i = 0; i < n && i < 1000; i++) { const p = this.crystalPrice; if (p.gt(this.cookies)) break; this.cookies = this.cookies.sub(p); this.crystals++; this.crystalBuys++; got++; }
+    return got;
+  }
   buyCrystal(id) {
     const it = CRYSTAL_SHOP.find((c) => c.id === id); if (!it || this.crystals < it.cost) return null;
     this.crystals -= it.cost; const now = Date.now(); const rw = this.gReward; let msg;
@@ -439,7 +446,7 @@ export class Game {
   serialize() {
     return {
       v: 2, name: this.name, cookies: this.cookies.toString(), total: this.total.toString(), totalReset: this.totalReset.toString(), clicks: this.clicks, golden: this.golden,
-      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals, sgold: this.sgold,
+      owned: this.owned, bought: packBits(this.bought), ach: packBits(this.ach), ascensions: this.ascensions, crystals: this.crystals, crystalBuys: this.crystalBuys, sgold: this.sgold,
       sing: this.sing, chipsEarned: this.chipsEarned.toString(), chipsSpent: this.chipsSpent, start: this.start, last: Date.now(), skin: this.skin, daily: this.daily, sounds: this.sounds, series: this.series,
     };
   }
@@ -453,7 +460,7 @@ export class Game {
     // Alte Spielstände (v1) hatten 10.000 Upgrades mit anderer Nummerierung: Käufe verfallen, Chips werden erstattet.
     if (d.v >= 2 && typeof d.bought === 'string') this.bought = unpackBits(d.bought, TOTAL_UPGRADES);
     if (typeof d.ach === 'string') { const a = unpackBits(d.ach, Math.max(ACH.length, 8)); this.ach = a.slice(0, ACH.length); }
-    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
+    this.sing = Math.floor(num(d.sing)); this.crystals = Math.floor(num(d.crystals)); this.crystalBuys = Math.floor(num(d.crystalBuys)); this.sgold = {}; if (d.sgold && typeof d.sgold === 'object') for (const k of Object.keys(SEASON_NAMES)) this.sgold[k] = Math.floor(num(d.sgold[k]));
     this.ascensions = num(d.ascensions); this.chipsEarned = Big.parse(d.chipsEarned); this.chipsSpent = d.v >= 2 ? num(d.chipsSpent) : 0;
     this.start = num(d.start, Date.now()); this.last = num(d.last, Date.now());
     if (typeof d.skin === 'string') this.skin = skinById(d.skin).id;
