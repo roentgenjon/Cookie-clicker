@@ -25,10 +25,8 @@ async function superMap(env) { // feste Admins aus env.ADMINS (dürfen weitere A
   for (const n of (env.ADMINS || '').split(',').map((x) => x.trim()).filter(Boolean)) map[(await sha256('id:' + n.toLowerCase())).slice(0, 16)] = n;
   return map;
 }
-async function adminMap(env) { // feste + ernannte Admins (ohne die, die ihren Zugang selbst dauerhaft gesperrt haben)
-  const map = { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
-  for (const k of (await env.SAVES.list({ prefix: 'adminlock:', limit: 500 })).keys) delete map[k.name.slice(10)];
-  return map;
+async function adminMap(env) { // feste + ernannte Admins
+  return { ...((await env.SAVES.get('admins', 'json')) || {}), ...(await superMap(env)) };
 }
 const nameToId = async (name) => (await sha256('id:' + String(name).trim().toLowerCase())).slice(0, 16);
 // Online-Anzeige: höchstens alle 90 s wird ein kurzlebiger Eintrag geschrieben (spart Schreibvorgänge)
@@ -243,7 +241,7 @@ async function listPlayers(env) {
 
 // ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
 const LOG_VIEWER = 'entity_2806';
-const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'selfLock', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'selfShield', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
 function describeEvent(e) {
   if (!e || typeof e !== 'object') return '';
   switch (e.type) {
@@ -281,7 +279,7 @@ function describeAdmin(b) {
     case 'appealDel': return 'Einspruch gelöscht';
     case 'pollShare': return 'Umfrage-Ergebnis im Chat geteilt';
     case 'guildDel': return 'Gilde aufgelöst';
-    case 'selfLock': return 'Admin-Zugang selbst dauerhaft gesperrt';
+    case 'selfShield': return 'eigenes Konto dauerhaft vor dem Admin-Panel geschützt';
     case 'maintSet': return b.on ? `Wartungsmodus an ${q(b.msg)}` : 'Wartungsmodus aus';
     case 'backupRestore': return 'Sicherung wiederhergestellt';
     case 'susDel': return 'Verdachtsmeldung erledigt';
@@ -303,6 +301,7 @@ async function admin(env, b) {
   const me = admins[b.id];
   const target = typeof b.target === 'string' && ID_RE.test(b.target) ? b.target : null;
   const needTarget = async () => (target && (await env.SAVES.get('p:' + target, 'json'))) || null;
+  if (target && b.action !== 'selfShield' && (await env.SAVES.get('adminshield:' + target))) return fail(env, 'Dieses Konto ist dauerhaft vor dem Admin-Panel geschützt – kein Einfluss mehr möglich.', 403);
 
   const targetName = target ? ((await env.SAVES.getWithMetadata('p:' + target, 'text')).metadata || {}).n || '' : ''; // vor dem Ausführen lesen (bei „Konto löschen“ gäbe es den Namen danach nicht mehr)
   if (b.action === 'adminLog') {
@@ -311,7 +310,7 @@ async function admin(env, b) {
   }
   const run = async () => { switch (b.action) {
     case 'whoami': return json(env, { admin: true, name: me });
-    case 'selfLock': { if (b.confirm !== 'SPERREN') return fail(env, 'Bestätigung fehlt'); await env.SAVES.put('adminlock:' + b.id, String(Date.now())); return json(env, { ok: true }); } // endgültig: es gibt absichtlich keine Funktion zum Aufheben
+    case 'selfShield': { if (b.confirm !== 'SCHUETZEN') return fail(env, 'Bestätigung fehlt'); await env.SAVES.put('adminshield:' + b.id, String(Date.now())); return json(env, { ok: true }); } // endgültig: es gibt absichtlich keine Funktion zum Aufheben
     case 'players': {
       const on = new Set(await onlineIds(env));
       const players = (await listPlayers(env)).map((p) => ({ ...p, online: on.has(p.id) })).sort((x, y) => y.score - x.score);
@@ -674,10 +673,12 @@ export default {
         await runSched(env);
         await touchSeen(env, b.id);
         const key = 'q:' + b.id;
-        const q = (await env.SAVES.get(key, 'json')) || [];
+        let q = (await env.SAVES.get(key, 'json')) || [];
         if (q.length) await env.SAVES.delete(key);
+        if (await env.SAVES.get('adminshield:' + b.id)) q = q.filter((x) => x.gift); // Geschenke von Spielern bleiben erlaubt
         const since = Number(b.since) || 0;
-        const bc = ((await env.SAVES.get('bc', 'json')) || []).filter((x) => x.t > since);
+        const shielded = !!(await env.SAVES.get('adminshield:' + b.id)); // geschützte Konten bekommen keine Admin-Ereignisse (nur Textnachrichten)
+        const bc = ((await env.SAVES.get('bc', 'json')) || []).filter((x) => x.t > since).map((x) => (shielded && x.event ? { ...x, event: null } : x)).filter((x) => x.text || x.event);
         const open = ((await env.SAVES.get('polls', 'json')) || []).find(pollOpen); // neueste offene Umfrage (für den Hinweis im Spiel)
         const reload = !!(await env.SAVES.get('rb:' + b.id)); if (reload) await env.SAVES.delete('rb:' + b.id);
         const season = await currentSeason(env);
