@@ -83,6 +83,8 @@ addEventListener('blur', stopHold);
 
 // ---------- Auto-Kauf & Tastenkürzel ----------
 let autoBuy = ls.get('cc_auto') === '1';
+const AUTO_SPEEDS = [[0.05, 'Blitz (20×/s)'], [0.1, 'Sehr schnell (10×/s)'], [0.25, 'Schnell (4×/s)'], [0.5, 'Normal (2×/s)'], [1, 'Gemütlich (1×/s)'], [2, 'Langsam (alle 2 s)'], [5, 'Sehr langsam (alle 5 s)'], [15, 'Alle 15 s'], [60, 'Jede Minute']];
+let autoEvery = (() => { const v = Number(ls.get('cc_autospeed')); return AUTO_SPEEDS.some(([s]) => s === v) ? v : 1; })();
 function paintAuto() { const b = $('#autoBtn'); if (b) { b.textContent = autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'; b.classList.toggle('on', autoBuy); } }
 function setAuto(v) { autoBuy = v; ls.set('cc_auto', v ? '1' : '0'); paintAuto(); if (modalKind === 'settings') renderSettings(); toast(v ? '🤖 Auto-Kauf an' : '🤖 Auto-Kauf aus'); }
 function autoBuyStep() {
@@ -326,7 +328,7 @@ function renderSettings() {
     <label>Lautstärke<input type="range" id="setVol" min="0" max="100" value="${Math.round(sound.volume * 100)}"></label>
     <label>Spielstand exportieren / importieren<textarea id="exp" rows="3" placeholder="Export-Code"></textarea></label>
     <div class="rowf"><button id="setLang" data-noi18n>🌐 Sprache / Language: ${i18n.lang === 'en' ? 'English' : 'Deutsch'}</button></div>
-    <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button></div>
+    <div class="rowf"><button id="setAuto">${autoBuy ? '🤖 Auto-Kauf: an' : '🤖 Auto-Kauf: aus'}</button><label>Auto-Kauf Tempo<select id="setAutoSpeed">${AUTO_SPEEDS.map(([s, t]) => `<option value="${s}" ${s === autoEvery ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
     <details><summary>📲 Als App installieren</summary><p class="note">iPhone/iPad (Safari): Teilen-Symbol → „Zum Home-Bildschirm“. Android/Chrome: Menü → „App installieren“. Dann startet das Spiel wie eine App im Vollbild.</p></details>
     <details><summary>⌨️ Tastenkürzel</summary><div class="kv">${SHORTCUTS.map(([k, t]) => `<span>${esc(t)}</span><b>${k}</b>`).join('')}</div></details>
     <div class="rowf"><button id="doExp">⬆️ Exportieren</button><button id="doImp">⬇️ Importieren</button><button id="doReset" style="color:var(--bad)">🗑️ Alles löschen</button></div></div>`;
@@ -340,6 +342,7 @@ function renderSettings() {
   $('#setBoosts').addEventListener('click', () => { showBoosts = !showBoosts; ls.set('cc_boosts', showBoosts ? '1' : '0'); $('#buffs').innerHTML = ''; renderSettings(); });
   $('#setVol').addEventListener('input', (e) => { sound.setVolume(e.target.value / 100); }); $('#setVol').addEventListener('change', () => sound.buy());
   $('#setLang').addEventListener('click', () => { saveLocal(); i18n.set(i18n.lang === 'en' ? 'de' : 'en'); });
+  $('#setAutoSpeed').addEventListener('change', (e) => { autoEvery = Number(e.target.value); ls.set('cc_autospeed', String(autoEvery)); autoT = 0; toast('🤖 Auto-Kauf-Tempo geändert'); });
   $('#setAuto').addEventListener('click', () => setAuto(!autoBuy));
   $('#saveNow').addEventListener('click', () => { saveLocal(); toast('Gespeichert ✔'); });
   $('#doExp').addEventListener('click', () => { $('#exp').value = btoa(unescape(encodeURIComponent(JSON.stringify(game.serialize())))); $('#exp').select(); });
@@ -517,7 +520,7 @@ function frame(now) {
   const wall = Date.now(); const gap = (wall - lastWall) / 1000; lastWall = wall;
   if (gap > 3) { const r = game.catchUp(gap - dt); if (!r.gain.isZero()) toast(`😴 Während du weg warst (${fmtTime(r.offlineSecs)}): <b>+${fmt(r.gain)}</b> Kekse`); }
   game.tick(dt);
-  autoT += dt; if (autoBuy && autoT >= 1) { autoT = 0; autoBuyStep(); }
+  autoT += dt; if (autoBuy && autoT >= autoEvery) { autoT = 0; autoBuyStep(); }
   histT += dt; if (histT >= 60) { histT = 0; hist.sample(game); }
   $('#cookies').textContent = fmt(game.cookies);
   $('#cps').textContent = fmt(game.cps);
