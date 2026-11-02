@@ -241,7 +241,7 @@ async function listPlayers(env) {
 
 // ---- Admin-Protokoll: nur Entity_2806 darf es lesen ----
 const LOG_VIEWER = 'entity_2806';
-const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'selfShield', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
+const ADMIN_LOGGED = new Set(['event', 'broadcast', 'ban', 'mute', 'delete', 'inspect', 'chatDel', 'chatClear', 'adminAdd', 'adminDel', 'schedAdd', 'schedDel', 'pollCreate', 'pollClose', 'pollDel', 'appealReply', 'appealDel', 'pollShare', 'guildDel', 'selfShield', 'shieldOff', 'maintSet', 'backupRestore', 'susDel', 'seasonSet']);
 function describeEvent(e) {
   if (!e || typeof e !== 'object') return '';
   switch (e.type) {
@@ -280,6 +280,7 @@ function describeAdmin(b) {
     case 'pollShare': return 'Umfrage-Ergebnis im Chat geteilt';
     case 'guildDel': return 'Gilde aufgelöst';
     case 'selfShield': return 'eigenes Konto dauerhaft vor dem Admin-Panel geschützt';
+    case 'shieldOff': return 'Admin-Schutz aufgehoben';
     case 'maintSet': return b.on ? `Wartungsmodus an ${q(b.msg)}` : 'Wartungsmodus aus';
     case 'backupRestore': return 'Sicherung wiederhergestellt';
     case 'susDel': return 'Verdachtsmeldung erledigt';
@@ -301,7 +302,7 @@ async function admin(env, b) {
   const me = admins[b.id];
   const target = typeof b.target === 'string' && ID_RE.test(b.target) ? b.target : null;
   const needTarget = async () => (target && (await env.SAVES.get('p:' + target, 'json'))) || null;
-  if (target && b.action !== 'selfShield' && (await env.SAVES.get('adminshield:' + target))) return fail(env, 'Dieses Konto ist dauerhaft vor dem Admin-Panel geschützt – kein Einfluss mehr möglich.', 403);
+  if (target && b.action !== 'selfShield' && b.action !== 'shieldOff' && (await env.SAVES.get('adminshield:' + target))) return fail(env, 'Dieses Konto ist dauerhaft vor dem Admin-Panel geschützt – kein Einfluss mehr möglich.', 403);
 
   const targetName = target ? ((await env.SAVES.getWithMetadata('p:' + target, 'text')).metadata || {}).n || '' : ''; // vor dem Ausführen lesen (bei „Konto löschen“ gäbe es den Namen danach nicht mehr)
   if (b.action === 'adminLog') {
@@ -310,6 +311,17 @@ async function admin(env, b) {
   }
   const run = async () => { switch (b.action) {
     case 'whoami': return json(env, { admin: true, name: me });
+    case 'shieldList': { // nur Entity_2806
+      if (me.toLowerCase() !== LOG_VIEWER) return fail(env, 'Nur Entity_2806 darf den Schutz verwalten.', 403);
+      const l = await env.SAVES.list({ prefix: 'adminshield:', limit: 200 }); const items = [];
+      for (const k of l.keys) { const id = k.name.slice(12); const n = ((await env.SAVES.getWithMetadata('p:' + id, 'text')).metadata || {}).n || id; items.push({ id, name: n }); }
+      return json(env, { items });
+    }
+    case 'shieldOff': { // nur Entity_2806 darf den Schutz aufheben
+      if (me.toLowerCase() !== LOG_VIEWER) return fail(env, 'Nur Entity_2806 darf den Schutz aufheben.', 403);
+      if (!target || !(await env.SAVES.get('adminshield:' + target))) return fail(env, 'Dieses Konto ist nicht geschützt', 404);
+      await env.SAVES.delete('adminshield:' + target); return json(env, { ok: true });
+    }
     case 'selfShield': { if (b.confirm !== 'SCHUETZEN') return fail(env, 'Bestätigung fehlt'); await env.SAVES.put('adminshield:' + b.id, String(Date.now())); return json(env, { ok: true }); } // endgültig: es gibt absichtlich keine Funktion zum Aufheben
     case 'players': {
       const on = new Set(await onlineIds(env));
