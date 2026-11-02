@@ -236,11 +236,11 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 
 // ---- Zeitkristalle kaufen ----
 {
-  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B(1e40); g.total = g.cookies;
+  const g = new Game(); g.owned[0] = 10; g.recalc(); g.cookies = B('1e110'); g.total = g.cookies;
   const p0 = N(g.crystalPrice); assert.equal(g.buyCrystals(1), 1); assert.equal(g.crystals, 1); assert.ok(N(g.crystalPrice) > p0 * 1.1, 'Preis steigt');
   const n = g.buyCrystals(1000); assert.ok(n > 1 && g.crystals === 1 + n, 'Max kaufen'); assert.equal(g.buyCrystals(1), 0, 'kein Geld mehr');
   const sv = new Game(); sv.load(JSON.parse(JSON.stringify(g.serialize()))); assert.equal(sv.crystalBuys, g.crystalBuys, 'Speichern/Laden');
-  g.cookies = B(1e30); g.total = g.cookies; g.ascend(); assert.equal(g.crystalBuys, 0, 'Preis nach Aufstieg zurückgesetzt');
+  g.cookies = B('1e140'); g.total = g.cookies; g.ascend(); assert.equal(g.crystalBuys, 0, 'Preis nach Aufstieg zurückgesetzt');
   console.log('Kristall-Kauf-Test OK');
 }
 
@@ -248,7 +248,7 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
 {
   const g = new Game(); assert.ok(String(g.applyEvent({ type: 'message', text: '🎁cry:25' })).includes('25')); assert.equal(g.crystals, 25);
   g.applyEvent({ type: 'message', text: '🎁cry:0' }); assert.equal(g.crystals, 25, '0 wird ignoriert');
-  const h = new Game(); h.owned[0] = 1; h.recalc(); assert.ok(h.baseCps.log10() > 26.9 && h.baseCps.log10() < 29.5, 'Produktion ×1e28: ' + h.baseCps.log10());
-  assert.ok(h.clickValue.log10() > 27.9, 'Klickwert ×1e28');
+  const h = new Game(); h.owned[0] = 1; h.recalc(); assert.ok(h.baseCps.log10() > 98.9 && h.baseCps.log10() < 101.5, 'Produktion ×1e100: ' + h.baseCps.log10());
+  assert.ok(h.clickValue.log10() > 99.9, 'Klickwert ×1e100');
   console.log('Admin-Kristalle/Bonus-Test OK');
 }
