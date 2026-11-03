@@ -28,7 +28,7 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot'], ['timewarp', '⏩ Zeitsprung'], ['chain', '⛓️ Kettenreaktion']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['guilds', '🏰 Gilden'], ['lock', '🛡️ Konto schützen'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['custom', '🎉 Eigenes Event'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['guilds', '🏰 Gilden'], ['lock', '🛡️ Konto schützen'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
 const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog', 'maint', 'sus', 'lock', 'guilds'];
 const LOG_TAB = ['adminlog', '🧾 Admin-Protokoll']; // nur für Entity_2806 (der Server prüft das ebenfalls)
 // Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
@@ -55,7 +55,10 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
   let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
-  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let myShield = null; let guildItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; const CE_DEF = { name: '', msg: '', on: {}, cookies: '1 mio', chips: 10, gcount: 5, geff: 'random', bkind: 'frenzy', bmult: 7, bsec: 77, bld: 0, bamt: 1 };
+  let ceState = JSON.parse(JSON.stringify(CE_DEF)); let ceTpl = (() => { try { const l = JSON.parse(localStorage.getItem('cc_adm_ce') || '[]'); return Array.isArray(l) ? l : []; } catch { return []; } })();
+  const saveTpl = () => { try { localStorage.setItem('cc_adm_ce', JSON.stringify(ceTpl.slice(0, 30))); } catch { /* egal */ } };
+  let shieldItems = null; let myShield = null; let guildItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -199,6 +202,21 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!susItems) return '<div class="adm-empty">Lade…</div>';
         if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
         return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
+      }
+      case 'custom': {
+        const c = ceState; const on = (k) => (c.on[k] ? 'checked' : '');
+        return `<div class="adm-hint">Baue ein eigenes Event aus mehreren Wirkungen und sende es an den gewählten Spieler oder an alle. Der Name und die Nachricht erscheinen als Hinweis bei den Spielern. Vorlagen bleiben auf diesem Gerät gespeichert.</div>
+        <div class="adm-grid">${fld('Event-Name', `<input type="text" id="ceName" maxlength="40" value="${esc(c.name)}" placeholder="z. B. Keks-Regen-Wochenende">`)}${fld('Nachricht (optional)', `<input type="text" id="ceMsg" maxlength="90" value="${esc(c.msg)}" placeholder="z. B. Viel Spaß!">`)}</div>
+        <div class="adm-sec"><h4>Wirkungen (Haken setzen, was enthalten sein soll)</h4>
+          <label class="rowf"><input type="checkbox" id="ceOn_cookies" ${on('cookies')}> 🍪 Kekse geben</label><div class="adm-grid">${fld('Menge', `<input type="text" id="ceCookies" value="${esc(c.cookies)}" placeholder="z. B. 1 mio, 5e9">`)}</div>
+          <label class="rowf"><input type="checkbox" id="ceOn_chips" ${on('chips')}> 😇 Himmelschips</label><div class="adm-grid">${fld('Anzahl', `<input type="number" id="ceChips" min="1" value="${c.chips}">`)}</div>
+          <label class="rowf"><input type="checkbox" id="ceOn_golden" ${on('golden')}> ⭐ Goldene Kekse</label><div class="adm-grid">${fld('Effekt', `<select id="ceGeff">${opt(EFFECTS, c.geff)}</select>`)}${fld('Anzahl', `<input type="number" id="ceGcount" min="1" max="30" value="${c.gcount}">`)}</div>
+          <label class="rowf"><input type="checkbox" id="ceOn_buff" ${on('buff')}> 🔥 Raserei</label><div class="adm-grid3">${fld('Art', `<select id="ceBkind"><option value="frenzy" ${c.bkind === 'frenzy' ? 'selected' : ''}>🍪 Kekse</option><option value="click" ${c.bkind === 'click' ? 'selected' : ''}>👆 Klick</option></select>`)}${fld('Multiplikator ×', `<input type="number" id="ceBmult" min="1" max="1000000" step="any" value="${c.bmult}">`)}${fld('Dauer (s)', `<input type="number" id="ceBsec" min="1" max="3600" value="${c.bsec}">`)}</div>
+          <label class="rowf"><input type="checkbox" id="ceOn_bld" ${on('bld')}> 🏭 Gebäude geben</label><div class="adm-grid">${fld('Gebäude', `<select id="ceBld">${BUILDINGS.map((b, i) => `<option value="${i}" ${+c.bld === i ? 'selected' : ''}>${b.icon} ${esc(b.name)}</option>`).join('')}</select>`)}${fld('Anzahl', `<input type="number" id="ceBamt" min="1" max="100000" value="${c.bamt}">`)}</div>
+          <label class="rowf"><input type="checkbox" id="ceOn_ach" ${on('ach')}> 🏆 Alle Erfolge freischalten</label>
+        </div>
+        <div class="adm-btns wrap"><button class="adm-go" data-act="ceSend">📨 Event senden (an ${sel === ALL ? 'ALLE' : sel ? esc(nameOf(sel)) : '…'})</button><button data-act="ceSave">💾 Als Vorlage speichern</button><button data-act="ceReset">🧹 Leeren</button></div>
+        <div class="adm-sec"><h4>📚 Vorlagen (${ceTpl.length})</h4>${ceTpl.length ? ceTpl.map((t, i) => `<div class="adm-sched"><span>🎉 ${esc(t.name)}</span><span class="note">${Object.keys(t.state.on || {}).filter((k) => t.state.on[k]).length} Wirkungen</span><span><button data-act="ceLoad" data-i="${i}">Laden</button> <button class="danger" data-act="ceDel" data-i="${i}">✕</button></span></div>`).join('') : '<div class="adm-hint">Noch keine Vorlagen.</div>'}</div>`;
       }
       case 'guilds': {
         if (!guildItems) return '<div class="adm-empty">Lade…</div>';
@@ -370,6 +388,33 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'susBan': { if (!(await askConfirm('Diesen Spieler wirklich sperren?'))) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
       case 'bkReload': { await loadBk(); return paint(); }
       case 'bkRestore': { if (!(await askConfirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).'))) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
+      case 'ceSend': case 'ceSave': case 'ceReset': case 'ceLoad': case 'ceDel': {
+        const get = (id, d) => { const e = root.querySelector('#' + id); return e ? e.value : d; };
+        const chk = (id) => { const e = root.querySelector('#' + id); return e ? !!e.checked : false; };
+        if (root.querySelector('#ceName')) ceState = { name: get('ceName', ''), msg: get('ceMsg', ''), on: { cookies: chk('ceOn_cookies'), chips: chk('ceOn_chips'), golden: chk('ceOn_golden'), buff: chk('ceOn_buff'), bld: chk('ceOn_bld'), ach: chk('ceOn_ach') }, cookies: get('ceCookies', '1 mio'), chips: get('ceChips', 10), gcount: get('ceGcount', 5), geff: get('ceGeff', 'random'), bkind: get('ceBkind', 'frenzy'), bmult: get('ceBmult', 7), bsec: get('ceBsec', 77), bld: get('ceBld', 0), bamt: get('ceBamt', 1) };
+        if (act === 'ceReset') { ceState = JSON.parse(JSON.stringify(CE_DEF)); return paint(); }
+        if (act === 'ceDel') { ceTpl.splice(+btn.dataset.i, 1); saveTpl(); return paint(); }
+        if (act === 'ceLoad') { const t = ceTpl[+btn.dataset.i]; if (t) ceState = JSON.parse(JSON.stringify({ ...CE_DEF, ...t.state })); return paint(); }
+        if (act === 'ceSave') { const nm = ceState.name.trim(); if (!nm) { say('Gib dem Event einen Namen, um es als Vorlage zu speichern', false); return paint(); } ceTpl = ceTpl.filter((t) => t.name !== nm); ceTpl.unshift({ name: nm, state: JSON.parse(JSON.stringify(ceState)) }); saveTpl(); say('Vorlage gespeichert'); return paint(); }
+        // ceSend: Wirkungen einsammeln und prüfen
+        const c = ceState; const evs = [];
+        if (c.on.cookies) { const n = parseBig(c.cookies); if (n.isZero()) { say('Kekse: ungültige Menge (z. B. 1 mio, 5e9)', false); return paint(); } evs.push({ type: 'cookies', amount: n.toString() }); }
+        if (c.on.chips) { const n = Math.floor(Number(c.chips)); if (!(n >= 1 && n <= 1e9)) { say('Himmelschips: 1 bis 1.000.000.000', false); return paint(); } evs.push({ type: 'chips', amount: n }); }
+        if (c.on.golden) { const n = Math.floor(Number(c.gcount)); if (!(n >= 1 && n <= 30)) { say('Goldene Kekse: 1 bis 30', false); return paint(); } evs.push({ type: 'golden', effect: c.geff, count: n }); }
+        if (c.on.buff) { const m = Number(c.bmult), sc = Math.floor(Number(c.bsec)); if (!(m >= 1 && m <= 1e6 && sc >= 1 && sc <= 3600)) { say('Raserei: Multiplikator 1 bis 1.000.000, Dauer 1 bis 3600 s', false); return paint(); } evs.push({ type: 'buff', kind: c.bkind, mult: m, seconds: sc }); }
+        if (c.on.bld) { const bi = Math.floor(Number(c.bld)), am = Math.floor(Number(c.bamt)); if (!(bi >= 0 && bi < BUILDINGS.length && am >= 1 && am <= 100000)) { say('Gebäude: Anzahl 1 bis 100.000', false); return paint(); } evs.push(bi < BASE_COUNT ? { type: 'building', b: bi, amount: am } : { type: 'message', text: `🎁bld:${bi}:${am}` }); }
+        if (c.on.ach) evs.push({ type: 'achievements' });
+        const title = c.name.trim(); const text = (title ? `🎉 ${title}${c.msg.trim() ? ': ' + c.msg.trim() : ''}` : c.msg.trim()).slice(0, 140);
+        if (!evs.length && !text) { say('Wähle mindestens eine Wirkung oder schreibe eine Nachricht', false); return paint(); }
+        if (!sel) { say('Wähle zuerst in der Liste einen Spieler oder „Alle Spieler“.', false); return paint(); }
+        if (sel === ALL && !(await askConfirm(`Event${title ? ` „${title}“` : ''} wirklich an ALLE Spieler senden?`, 'Senden'))) return;
+        try {
+          if (sel === ALL) { if (!evs.length) await call('broadcast', { text }); else for (let i = 0; i < evs.length; i++) await call('broadcast', { event: evs[i], text: i === 0 ? text : '' }); }
+          else { if (text) await call('event', { target: sel, event: { type: 'message', text } }); for (const ev of evs) await call('event', { target: sel, event: ev }); }
+          say(`🎉 Event${title ? ` „${title}“` : ''} an ${nameOf(sel)} gesendet (${evs.length} Wirkung${evs.length === 1 ? '' : 'en'})`); toast(`✔ Event → ${nameOf(sel)}`);
+        } catch { return; }
+        return paint();
+      }
       case 'gRename': { const id = btn.dataset.id; try { await call('guildRename', { gid: id, name: val('#gn_' + id), tag: val('#gt_' + id) }); say('Gilde umbenannt'); await loadGuilds(); } catch { return; } return paint(); }
       case 'gPriv': { try { await call('guildPriv', { gid: btn.dataset.id, priv: btn.dataset.v === '1' }); say(btn.dataset.v === '1' ? 'Gilde: nur Einladung' : 'Gilde: offen für alle'); await loadGuilds(); } catch { return; } return paint(); }
       case 'gDel': { if (!(await askConfirm('Diese Gilde wirklich auflösen? Alle Mitglieder werden entfernt.', 'Auflösen'))) return; try { await call('guildDel', { gid: btn.dataset.id }); say('Gilde aufgelöst'); await loadGuilds(); } catch { return; } return paint(); }

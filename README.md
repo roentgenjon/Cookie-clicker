@@ -32,7 +32,7 @@ Spielstände speichern die Käufe lauflängenkodiert.
 - 🔊 Sound-Shop: 5 Klang-Pakete (Klassisch, 8-Bit, Zen, Weltraum, Episch) und 5 Musikstücke, mit Vorschau
 - 🎨 14 freischaltbare Keks-Skins
 - 🎁 Geschenke zwischen Spielern (max. 50 % des Vorrats, 5 pro Tag)
-- 🛡️ Admin-Panel: Sterne spawnen, Boosts, Geben, Upgrades, Nachrichten, Zeitplan, Admins ernennen, sperren/stumm/zurücksetzen/löschen
+- 🛡️ Admin-Panel (inkl. „🎉 Eigenes Event“: mehrere Wirkungen zu einem Event bündeln, an Spieler oder alle senden, Vorlagen speichern): Sterne spawnen, Boosts, Geben, Upgrades, Nachrichten, Zeitplan, Admins ernennen, sperren/stumm/zurücksetzen/löschen
 
 ## Datenbank
 Der Worker speichert alles in **Cloudflare D1** (SQLite, kostenlos 100.000 Schreibvorgänge/Tag). Die frühere KV-Datenbank
