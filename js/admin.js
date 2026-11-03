@@ -100,7 +100,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
-  async function loadGuilds() { try { guildItems = (await cloud.admin('guildList')).items; } catch (e) { guildItems = { error: e.message }; } }
+  async function loadGuilds() { try { const it = (await cloud.admin('guildList')).items; guildItems = Array.isArray(it) && it.every((g) => Array.isArray(g.members)) ? it : { error: 'Unbekannte Aktion' }; } catch (e) { guildItems = { error: e.message }; } } // alter Server liefert die Mitglieder nur als Zahl: dann Hinweis statt Absturz
   async function loadShield() { try { myShield = !!(await cloud.admin('whoami')).shielded; } catch { myShield = null; } if (!isLogViewer) return; try { shieldItems = (await cloud.admin('shieldList')).items; } catch { shieldItems = []; } }
   async function loadMaint() { try { const [m, s] = await Promise.all([cloud.admin('maintGet'), cloud.admin('seasonGet')]); maintData = { maint: m.maint, season: s.season, seasons: s.seasons }; } catch (e) { maintData = { error: e.message }; } }
   async function loadSus() { try { susItems = (await cloud.admin('susList')).items; } catch { susItems = []; } }
