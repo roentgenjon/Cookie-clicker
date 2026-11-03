@@ -256,17 +256,6 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Stauchungs-Test OK');
 }
 
-// ---- Preisanpassung nach Gesamt-Kekse ----
-{
-  const { PRICE_EXP } = await import('../js/engine.js');
-  const g = new Game(); g.total = B(1e5); const c0 = g.buildingCost(3, 1); assert.equal(g.priceLog, 0, 'unter 1 Mio keine Anpassung');
-  g.total = B(1e12); const c1 = g.buildingCost(3, 1); assert.ok(Math.abs(c1.log10() - c0.log10() - 6 * PRICE_EXP) < 1e-9, 'Faktor (1e12/1e6)^PRICE_EXP');
-  g.total = B(1e24); assert.ok(g.buildingCost(3, 1).log10() > c1.log10(), 'mit mehr Kekse teurer');
-  g.cookies = B(1e3); g.total = B(1e24); const hi = g.buildingCost(3, 1); g.cookies = B(1); assert.equal(g.buildingCost(3, 1).cmp(hi), 0, 'Ausgeben macht nichts billiger (zählt Gesamt, nicht Guthaben)');
-  const s = new Game(); s.owned[0] = 20; s.recalc(); s.total = B(1e12); const sp = s.seriesPrice(0, 1); s.total = B(1); assert.ok(sp.log10() > s.seriesPrice(0, 1).log10() + 1.4, 'Mega-Stufen auch angepasst');
-  const m = new Game(); m.total = B(1e12); m.cookies = m.buildingCost(0, 5).mulN(1.001); assert.equal(m.maxAffordable(0), 5, 'Max-Kauf passt zum angepassten Preis');
-  console.log('Preisanpassung-Test OK');
-}
 
 // ---- Auto-Kauf (Engine) ----
 {
@@ -290,12 +279,9 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   console.log('Obergrenze-Test OK');
 }
 
-// ---- Preisanpassung zählt nur die aktuelle Runde (kein Festfahren nach dem Aufstieg) ----
+// ---- Keine Preisanpassung: Preise hängen nur vom Besitz ab ----
 {
-  const { Big } = await import('../js/big.js');
-  const g = new Game(); g.totalReset = Big.fromLog(1e13); g.total = B(0); g.cookies = B(1e50);
-  assert.equal(g.priceLog, 0, 'frische Runde: normale Preise trotz riesiger früherer Runden');
-  assert.ok(g.buildingCost(0, 1).log10() < 2, 'erstes Gebäude kostet normal'); assert.ok(g.maxAffordable(0) > 100, 'Kaufen geht sofort wieder');
-  const h = new Game(); h.owned.fill(1e12); h.recalc(); h.cookies = Big.fromLog(1e13); h.total = h.cookies; h.ascend(); assert.equal(h.priceLog, 0, 'nach dem Aufstieg normale Preise');
-  console.log('Runden-Preis-Test OK');
+  const g = new Game(); const c0 = g.buildingCost(3, 1); g.total = B('1e300'); g.totalReset = B('1e300'); assert.equal(g.buildingCost(3, 1).cmp(c0), 0, 'Preis ändert sich nicht mit den gebackenen Keksen');
+  const s = new Game(); s.owned[0] = 20; s.recalc(); const sp = s.seriesPrice(0, 1); s.total = B('1e300'); assert.equal(s.seriesPrice(0, 1).cmp(sp), 0, 'Mega-Stufen ebenso');
+  console.log('Preise-unverändert-Test OK');
 }
