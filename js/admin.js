@@ -28,8 +28,8 @@ export function parseNum(txt) {
 const EFFECTS = [['random', 'Zufällig'], ['frenzy', '🔥 Raserei'], ['lucky', '🍀 Glückstreffer'], ['click', '👆 Klick-Raserei'], ['jackpot', '💰 Jackpot'], ['timewarp', '⏩ Zeitsprung'], ['chain', '⛓️ Kettenreaktion']];
 const opt = (list, sel) => list.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 
-const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['lock', '🛡️ Konto schützen'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
-const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog', 'maint', 'sus', 'lock'];
+const TABS = [['stars', '⭐ Sterne'], ['boost', '🔥 Boost'], ['give', '🎁 Geben'], ['up', '🧪 Upgrades'], ['msg', '💬 Nachricht'], ['sched', '⏰ Zeitplan'], ['admins', '👑 Admins'], ['polls', '📊 Umfragen'], ['banlog', '📜 Bann-Verlauf'], ['appeals', '📨 Einsprüche'], ['maint', '🛠️ Wartung & Saison'], ['guilds', '🏰 Gilden'], ['lock', '🛡️ Konto schützen'], ['sus', '🕵️ Verdacht'], ['bk', '💾 Sicherungen'], ['manage', '⚙️ Verwaltung']];
+const GLOBAL_TABS = ['sched', 'admins', 'banlog', 'appeals', 'polls', 'adminlog', 'maint', 'sus', 'lock', 'guilds'];
 const LOG_TAB = ['adminlog', '🧾 Admin-Protokoll']; // nur für Entity_2806 (der Server prüft das ebenfalls)
 // Eigene Dauer: "90", "90 min", "1,5 Std", "3 Tage", "2 Wochen" -> Minuten (NaN bei Ungültigem)
 export function parseDur(txt) {
@@ -55,7 +55,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   body.innerHTML = '<div class="adm" id="adm">Lade…</div>';
   const root = body.querySelector('#adm');
   let players = []; let logItems = null; let logQ = ''; let pollItems = null; let banItems = null;
-  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let myShield = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
+  const isLogViewer = (cloud.name || '').toLowerCase() === 'entity_2806'; let appealItems = null; let shieldItems = null; let myShield = null; let guildItems = null; let maintData = null; let susItems = null; let bkItems = null; let schedItems = null; let adminData = null; const sent = []; let sel = null; let tab = 'stars'; let q = ''; let stats = null; let note = null; let info = ''; let now = Date.now();
   const $ = (s) => root.querySelector(s);
   const val = (s) => $(s).value;
   const ALL = 'ALL';
@@ -100,6 +100,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
   async function loadPolls() { try { pollItems = (await cloud.admin('pollList')).items; } catch { pollItems = []; } }
   async function loadBanLog() { try { banItems = (await cloud.admin('banLog')).items; } catch { banItems = []; } }
   async function loadAppeals() { try { appealItems = (await cloud.admin('appealList')).items; } catch { appealItems = []; } }
+  async function loadGuilds() { try { guildItems = (await cloud.admin('guildList')).items; } catch (e) { guildItems = { error: e.message }; } }
   async function loadShield() { try { myShield = !!(await cloud.admin('whoami')).shielded; } catch { myShield = null; } if (!isLogViewer) return; try { shieldItems = (await cloud.admin('shieldList')).items; } catch { shieldItems = []; } }
   async function loadMaint() { try { const [m, s] = await Promise.all([cloud.admin('maintGet'), cloud.admin('seasonGet')]); maintData = { maint: m.maint, season: s.season, seasons: s.seasons }; } catch (e) { maintData = { error: e.message }; } }
   async function loadSus() { try { susItems = (await cloud.admin('susList')).items; } catch { susItems = []; } }
@@ -199,6 +200,14 @@ export async function renderAdmin(body, { fmt, toast, title }) {
         if (!susItems.length) return '<div class="adm-hint">Keine Verdachtsfälle. Der Server prüft beim Speichern auf unmögliche Klick- und Goldkeks-Raten.</div>';
         return `<div class="adm-hint">Automatische Hinweise auf mögliches Schummeln (nur Hinweise – prüfe selbst, bevor du jemanden sperrst).</div>${susItems.map((x) => `<div class="adm-sec"><h4>🕵️ ${esc(x.n || x.id)} <small>${x.c}× · ${ago(x.t)}</small></h4><div class="note">${esc(x.r || '')}</div><div class="adm-btns wrap"><button data-act="susBan" data-id="${x.id}">🚫 Sperren</button><button data-act="susDel" data-id="${x.id}">✅ Erledigt</button></div></div>`).join('')}`;
       }
+      case 'guilds': {
+        if (!guildItems) return '<div class="adm-empty">Lade…</div>';
+        if (guildItems.error) return `<div class="adm-hint">${esc(guildItems.error === 'Unbekannte Aktion' ? 'Der Server kennt die Gilden-Verwaltung noch nicht (Update steht aus).' : guildItems.error)}</div>`;
+        if (!guildItems.length) return '<div class="adm-hint">Es gibt noch keine Gilden.</div>';
+        return `<div class="adm-hint">Alle Gilden verwalten: umbenennen, auf „nur Einladung“ stellen, Mitglieder entfernen, auflösen. Geschützte Konten (🛡️) lassen sich nicht entfernen.</div>${guildItems.map((g) => `<div class="adm-sec"><h4>🏰 ${esc(g.name)} [${esc(g.tag)}] ${g.priv ? '🔒' : '🌍'} <small>${g.members.length} Mitglieder · Gründer ${esc(g.ownerName)} · ${g.invited} Einladungen</small></h4>
+          <div class="adm-grid"><label class="fld"><span>Name</span><input type="text" id="gn_${g.id}" maxlength="16" value="${esc(g.name)}"></label><label class="fld"><span>Kürzel</span><input type="text" id="gt_${g.id}" maxlength="4" value="${esc(g.tag)}"></label><div class="adm-btns wrap"><button data-act="gRename" data-id="${g.id}">✏️ Umbenennen</button><button data-act="gPriv" data-id="${g.id}" data-v="${g.priv ? 0 : 1}">${g.priv ? '🌍 Für alle öffnen' : '🔒 Nur Einladung'}</button><button class="danger" data-act="gDel" data-id="${g.id}">🗑️ Auflösen</button></div></div>
+          ${g.members.map((m) => `<div class="adm-sched"><span>${m.online ? '🟢' : '⚪'} ${m.owner ? '👑 ' : ''}${esc(m.name)}</span><span></span><button class="danger" data-act="gKick" data-id="${g.id}" data-m="${m.id}">Entfernen</button></div>`).join('')}</div>`).join('')}`;
+      }
       case 'lock': return `<div class="adm-sec danger-zone"><h4>🛡️ Mein Konto dauerhaft schützen – ${myShield === null ? 'Status wird geprüft…' : myShield ? '✅ ist GESCHÜTZT' : '❌ ist NICHT geschützt'}</h4><div class="adm-hint">Du behältst dein Admin-Panel und kannst es weiter für andere Spieler benutzen. Aber: Wenn du das hier bestätigst, hat <b>niemand mehr mit dem Admin-Panel Einfluss auf dein Konto</b> – weder du noch andere Admins (kein Kekse geben, Sperren, Stummschalten, Zurücksetzen, Löschen, Ansehen, Wiederherstellen, auch keine Rundsendungen mit Ereignissen). Das lässt sich <b>nicht rückgängig machen</b> – nur Entity_2806 kann den Schutz aufheben.</div><div class="adm-btns"><button class="danger" data-act="selfShield">🛡️ Mein Konto für immer schützen</button></div></div>${isLogViewer ? `<div class="adm-sec"><h4>🛡️ Geschützte Konten (nur du kannst den Schutz aufheben)</h4>${shieldItems === null ? '<div class="adm-empty">Lade…</div>' : shieldItems.length ? shieldItems.map((x) => `<div class="adm-sched"><span>🛡️ ${esc(x.name)}</span><span></span><button data-act="shieldOff" data-id="${x.id}">Schutz aufheben</button></div>`).join('') : '<div class="adm-hint">Kein Konto ist geschützt.</div>'}</div>` : ''}`;
       case 'bk': {
         if (all) return '<div class="adm-hint">Sicherungen gibt es nur für einzelne Spieler. Wähle in der Liste einen Spieler.</div>';
@@ -261,7 +270,7 @@ export async function renderAdmin(body, { fmt, toast, title }) {
     const row = e.target.closest('.adm-row[data-id]');
     if (row) { sel = row.dataset.id; info = ''; note = null; if (sel === ALL && tab === 'manage') tab = 'stars'; if (GLOBAL_TABS.includes(tab)) tab = 'stars'; if (tab === 'bk') { loadBk().then(paint); } return paint(); }
     const tb = e.target.closest('button[data-tab]');
-    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } if (tab === 'maint') { await loadMaint(); paint(); } if (tab === 'lock') { await loadShield(); paint(); } if (tab === 'sus') { await loadSus(); paint(); } if (tab === 'bk') { await loadBk(); paint(); } return; }
+    if (tb) { tab = tb.dataset.tab; note = null; paint(); if (tab === 'sched') { await loadSched(); paint(); } if (tab === 'admins') { await loadAdmins(); paint(); } if (tab === 'polls') { await loadPolls(); paint(); } if (tab === 'adminlog') { await loadLog(); paint(); } if (tab === 'banlog') { await loadBanLog(); paint(); } if (tab === 'appeals') { await loadAppeals(); paint(); } if (tab === 'maint') { await loadMaint(); paint(); } if (tab === 'lock') { await loadShield(); paint(); } if (tab === 'guilds') { await loadGuilds(); paint(); } if (tab === 'sus') { await loadSus(); paint(); } if (tab === 'bk') { await loadBk(); paint(); } return; }
     const btn = e.target.closest('button'); if (!btn) return;
     if (btn.id === 'reload') { await refresh(); return paint(); }
     const act = btn.dataset.act; if (!act) return;
@@ -361,6 +370,10 @@ export async function renderAdmin(body, { fmt, toast, title }) {
       case 'susBan': { if (!(await askConfirm('Diesen Spieler wirklich sperren?'))) return; try { await call('ban', { target: btn.dataset.id, banned: true, minutes: 0, reason: 'Verdacht auf Cheating' }); say('Gesperrt'); await refresh(); } catch { return; } return paint(); }
       case 'bkReload': { await loadBk(); return paint(); }
       case 'bkRestore': { if (!(await askConfirm('Diesen Spielstand wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und vorher gesichert).'))) return; try { await call('backupRestore', { target: sel, t: Number(btn.dataset.t) }); say('Wiederhergestellt – der Spieler lädt den Stand beim nächsten Abruf'); await loadBk(); } catch { return; } return paint(); }
+      case 'gRename': { const id = btn.dataset.id; try { await call('guildRename', { gid: id, name: val('#gn_' + id), tag: val('#gt_' + id) }); say('Gilde umbenannt'); await loadGuilds(); } catch { return; } return paint(); }
+      case 'gPriv': { try { await call('guildPriv', { gid: btn.dataset.id, priv: btn.dataset.v === '1' }); say(btn.dataset.v === '1' ? 'Gilde: nur Einladung' : 'Gilde: offen für alle'); await loadGuilds(); } catch { return; } return paint(); }
+      case 'gDel': { if (!(await askConfirm('Diese Gilde wirklich auflösen? Alle Mitglieder werden entfernt.', 'Auflösen'))) return; try { await call('guildDel', { gid: btn.dataset.id }); say('Gilde aufgelöst'); await loadGuilds(); } catch { return; } return paint(); }
+      case 'gKick': { if (!(await askConfirm('Dieses Mitglied aus der Gilde entfernen?', 'Entfernen'))) return; try { await call('guildKick', { gid: btn.dataset.id, target: btn.dataset.m }); say('Mitglied entfernt'); await loadGuilds(); } catch { return; } return paint(); }
       case 'shieldOff': { if (!(await askConfirm('Den Schutz dieses Kontos aufheben? Danach hat das Admin-Panel wieder Einfluss darauf.', 'Aufheben'))) return; try { await call('shieldOff', { target: btn.dataset.id }); say('Schutz aufgehoben'); await loadShield(); } catch { return; } return paint(); }
       case 'selfShield': {
         if (!(await askConfirm('Dein Konto DAUERHAFT vor dem Admin-Panel schützen? Danach kann niemand mehr (auch du nicht) per Admin-Panel Einfluss darauf nehmen. Das kann nicht rückgängig gemacht werden.', 'Weiter'))) return;

@@ -152,29 +152,40 @@ export async function renderGuild(body, { fmt, toast, title }) {
   const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (e) { toast('❌ ' + (e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Der Server kennt Gilden noch nicht (Update steht aus)' : e.message)); } paint(); };
   let timer = 0;
   async function paint() {
-    let me; try { me = (await cloud.guild('me')).guild; } catch (e) { body.innerHTML = `<p class="note">❌ ${esc(e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Gilden gibt es noch nicht auf dem Server – der Cloudflare-Worker muss einmal neu veröffentlicht werden (Update steht aus). Bis dahin kannst du keiner Gilde beitreten.' : e.message)}</p>`; return; }
+    let me; let invites = []; try { const mr = await cloud.guild('me'); me = mr.guild; invites = mr.invites || []; } catch (e) { body.innerHTML = `<p class="note">❌ ${esc(e.status === 404 || /nicht gefunden|Unbekannt/i.test(e.message) ? 'Gilden gibt es noch nicht auf dem Server – der Cloudflare-Worker muss einmal neu veröffentlicht werden (Update steht aus). Bis dahin kannst du keiner Gilde beitreten.' : e.message)}</p>`; return; }
     if (!body.isConnected) return;
     if (me) {
       title(`🏰 ${me.name} [${me.tag}]`);
       const keep = body.querySelector('#gcIn') ? body.querySelector('#gcIn').value : '';
-      body.innerHTML = `<div class="shop-top"><div><b>${me.members.length} Mitglieder · zusammen ${pw(me.power)} Kekse</b><div class="note">Gründer: ${esc((me.members.find((m) => m.owner) || {}).name || '?')}</div></div></div>
+      body.innerHTML = `<div class="shop-top"><div><b>${me.members.length} Mitglieder · zusammen ${pw(me.power)} Kekse</b><div class="note">Gründer: ${esc((me.members.find((m) => m.owner) || {}).name || '?')}${me.priv ? ' · 🔒 nur auf Einladung' : ' · 🌍 offen für alle'}</div></div></div>
+        ${me.owner ? `<div class="adm-sec"><h4>⚙️ Gilde verwalten</h4>
+          <form id="gRen" class="adm-grid"><label class="fld"><span>Name</span><input type="text" id="grName" maxlength="16" value="${esc(me.name)}"></label><label class="fld"><span>Kürzel (2–4)</span><input type="text" id="grTag" maxlength="4" value="${esc(me.tag)}"></label><div class="adm-btns"><button>✏️ Umbenennen</button></div></form>
+          <label class="rowf"><input type="checkbox" id="gPriv" ${me.priv ? 'checked' : ''}> 🔒 Nur eingeladene Spieler dürfen beitreten</label>
+          <form id="gInv" class="adm-grid"><label class="fld"><span>Spieler einladen (genauer Name)</span><input type="text" id="giName" maxlength="16" placeholder="Name des Spielers"></label><div class="adm-btns"><button>📨 Einladen</button></div></form>
+          ${me.invited.length ? `<div class="note">Eingeladen: ${me.invited.map((n) => `<span class="fr-chip">${esc(n)} <button data-uninv="${esc(n)}" title="Einladung zurückziehen">✕</button></span>`).join(' ')}</div>` : '<div class="note">Noch niemand eingeladen.</div>'}</div>` : ''}
         <div class="adm-sec"><h4>👥 Mitglieder</h4>${me.members.map((m) => `<div class="adm-sched"><span>${m.online ? '🟢' : '⚪'} ${m.owner ? '👑 ' : ''}${esc(m.name)}</span><span>${pw(m.sl)} gebacken${m.sg ? ` · 🕳️ ${m.sg}` : ''}</span>${me.owner && !m.owner ? `<button class="danger" data-kick="${esc(m.name)}">Entfernen</button>` : '<span></span>'}</div>`).join('')}</div>
         <div class="adm-sec"><h4>💬 Gilden-Chat</h4><div class="gchat">${me.chat.length ? me.chat.slice(-30).map((m) => `<div><b>${esc(m.n)}</b> <span class="note">${new Date(m.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span><br>${esc(m.x)}</div>`).join('') : '<div class="note">Noch keine Nachrichten.</div>'}</div>
         <form id="gcForm" class="rowf"><input type="text" id="gcIn" maxlength="200" placeholder="Nachricht an die Gilde …" value="${esc(keep)}"><button>Senden</button></form></div>
         <button id="gLeave" class="danger">🚪 Gilde verlassen</button>`;
       const box = body.querySelector('.gchat'); if (box) box.scrollTop = box.scrollHeight;
       body.querySelector('#gcForm').onsubmit = (e) => { e.preventDefault(); const t = body.querySelector('#gcIn').value.trim(); if (t) run(async () => { await cloud.guild('chat', { text: t }); body.querySelector('#gcIn').value = ''; }); };
+      if (me.owner) {
+        body.querySelector('#gRen').onsubmit = (e) => { e.preventDefault(); run(() => cloud.guild('rename', { name: body.querySelector('#grName').value, tag: body.querySelector('#grTag').value }), '✏️ Umbenannt'); };
+        body.querySelector('#gPriv').onchange = (e) => run(() => cloud.guild('priv', { priv: e.target.checked }), e.target.checked ? '🔒 Nur noch auf Einladung' : '🌍 Wieder offen für alle');
+        body.querySelector('#gInv').onsubmit = (e) => { e.preventDefault(); const n = body.querySelector('#giName').value.trim(); if (n) run(() => cloud.guild('invite', { name: n }), '📨 Eingeladen'); };
+        body.querySelectorAll('[data-uninv]').forEach((b) => { b.onclick = () => run(() => cloud.guild('uninvite', { name: b.dataset.uninv }), 'Einladung zurückgezogen'); });
+      }
       body.querySelector('#gLeave').onclick = async () => { if (await askConfirm('Gilde wirklich verlassen?')) run(() => cloud.guild('leave'), 'Du hast die Gilde verlassen'); };
       body.querySelectorAll('[data-kick]').forEach((b) => { b.onclick = () => run(() => cloud.guild('kick', { name: b.dataset.kick }), 'Entfernt'); });
     } else {
       title('🏰 Gilden');
       let list = []; try { list = (await cloud.guildList()).guilds; } catch { /* leer */ }
-      body.innerHTML = `<div class="adm-sec"><h4>➕ Eigene Gilde gründen</h4><form id="gNew" class="adm-grid"><label class="fld"><span>Name</span><input type="text" id="gnName" maxlength="16" placeholder="z. B. Keksbande"></label><label class="fld"><span>Kürzel (2–4)</span><input type="text" id="gnTag" maxlength="4" placeholder="KEKS"></label><div class="adm-btns"><button>🏰 Gründen</button></div></form></div>
-        <div class="adm-sec"><h4>🏆 Gilden-Rangliste</h4>${list.length ? list.map((g, i) => `<div class="adm-sched"><span>${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} <b>${esc(g.name)}</b> [${esc(g.tag)}]</span><span>${g.members}/20 · ${g.power >= 0 ? pw(g.power) : '–'}</span><button data-join="${g.id}" ${g.open ? '' : 'disabled'}>${g.open ? 'Beitreten' : 'Voll'}</button></div>`).join('') : '<div class="note">Noch keine Gilden – gründe die erste!</div>'}</div>`;
+      body.innerHTML = `${invites.length ? `<div class="adm-sec"><h4>📨 Einladungen für dich</h4>${invites.map((g) => `<div class="adm-sched"><span><b>${esc(g.name)}</b> [${esc(g.tag)}]</span><span></span><button data-join="${g.id}">Beitreten</button></div>`).join('')}</div>` : ''}<div class="adm-sec"><h4>➕ Eigene Gilde gründen</h4><form id="gNew" class="adm-grid"><label class="fld"><span>Name</span><input type="text" id="gnName" maxlength="16" placeholder="z. B. Keksbande"></label><label class="fld"><span>Kürzel (2–4)</span><input type="text" id="gnTag" maxlength="4" placeholder="KEKS"></label><div class="adm-btns"><button>🏰 Gründen</button></div></form></div>
+        <div class="adm-sec"><h4>🏆 Gilden-Rangliste</h4>${list.length ? list.map((g, i) => `<div class="adm-sched"><span>${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} <b>${esc(g.name)}</b> [${esc(g.tag)}]${g.priv ? ' 🔒' : ''}${g.invited ? ' 📨' : ''}</span><span>${g.members}/20 · ${g.power >= 0 ? pw(g.power) : '–'}</span><button data-join="${g.id}" ${g.open ? '' : 'disabled'}>${g.open ? 'Beitreten' : g.full ? 'Voll' : '🔒 Nur Einladung'}</button></div>`).join('') : '<div class="note">Noch keine Gilden – gründe die erste!</div>'}</div>`;
       body.querySelector('#gNew').onsubmit = (e) => { e.preventDefault(); run(() => cloud.guild('create', { name: body.querySelector('#gnName').value, tag: body.querySelector('#gnTag').value }), '🏰 Gilde gegründet'); };
       body.querySelectorAll('[data-join]').forEach((b) => { b.onclick = () => run(() => cloud.guild('join', { gid: b.dataset.join }), '🏰 Beigetreten'); });
     }
   }
   await paint();
-  clearInterval(timer); timer = setInterval(() => { if (!body.isConnected || !document.querySelector('#modal[open]') || document.querySelector('#modalTitle').textContent.indexOf('🏰') !== 0) { clearInterval(timer); return; } if (!body.querySelector('#gcIn') || document.activeElement !== body.querySelector('#gcIn')) paint(); }, 8000);
+  clearInterval(timer); timer = setInterval(() => { if (!body.isConnected || !document.querySelector('#modal[open]') || document.querySelector('#modalTitle').textContent.indexOf('🏰') !== 0) { clearInterval(timer); return; } const ae = document.activeElement; if (!(ae && body.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) paint(); }, 8000);
 }

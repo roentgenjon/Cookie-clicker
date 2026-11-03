@@ -20,7 +20,7 @@ die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das rund *
 
 **Kekse-Bonus:** für ältere Spielstände: alle Einnahmen (Produktion und Klicks) ×10^100. „Alles löschen“ und neue Spiele starten ohne ihn (echter Neustart, Klick = 1).
 
-**Neu:** Auto-Kauf (Taste A), Tastenkürzel (Optionen), Freundesliste (⭐), Verlaufs-Diagramm in der Statistik, goldene Keks-Effekte Zeitsprung ⏩ und Kettenreaktion ⛓️, 326 Erfolge (mit Abzeichen im Chat), Rangliste nach Singularität, Saison-Events (Halloween, Weihnachten, Neujahr + vom Admin startbar), installierbare App (PWA), Wartungsmodus, Sicherungen und Cheat-Hinweise für Admins, Gilden (bis 20 Mitglieder, Gilden-Chat, Gilden-Rangliste).
+**Neu:** Auto-Kauf (Taste A), Tastenkürzel (Optionen), Freundesliste (⭐), Verlaufs-Diagramm in der Statistik, goldene Keks-Effekte Zeitsprung ⏩ und Kettenreaktion ⛓️, 326 Erfolge (mit Abzeichen im Chat), Rangliste nach Singularität, Saison-Events (Halloween, Weihnachten, Neujahr + vom Admin startbar), installierbare App (PWA), Wartungsmodus, Sicherungen und Cheat-Hinweise für Admins, Gilden (bis 20 Mitglieder, Gilden-Chat, Gilden-Rangliste, umbenennen, „nur Einladung“, Verwaltung im Admin-Panel).
 Gespeichert wird nur der Fortschritt je Reihe, die Stufen selbst sind Mathematik.
 
 Technik: Die Upgrades liegen als kompakte Typed Arrays vor (Namen/Texte werden erst bei Bedarf erzeugt),
