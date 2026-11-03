@@ -206,9 +206,10 @@ export class Game {
   get clickValue() { return Big.fromLog(this.clickLog + (this.boost ? MONEY_LOG : 0)).compress().add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
-  // Preisanpassung: Je mehr Kekse du insgesamt gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Gesamt-Kekse / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
-  // Es zählt die Gesamtzahl (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger.
-  get priceLog() { const t = this.totalReset.add(this.total); if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
+  // Preisanpassung: Je mehr Kekse du in DIESER Runde gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Kekse dieser Runde / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
+  // Es zählt die Gesamtzahl der Runde (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger. Beim Aufstieg / „Alles löschen“ beginnt die Runde neu mit normalen Preisen
+  // (früher zählte alles seit Spielbeginn – nach einem Aufstieg waren die Preise dann unbezahlbar hoch und nichts ging mehr).
+  get priceLog() { const t = this.total; if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
   buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog).compress(); }
   // Mehr als OWN_CAP je Gebäude gibt es nicht: darüber sind Anzahlen als Zahl nicht mehr genau (jeder weitere Kauf ginge verloren)
   maxAffordable(i) { const room = OWN_CAP - this.owned[i]; return room > 0 ? geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand().mulLog(-this.priceLog), room) : 0; }
