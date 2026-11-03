@@ -51,8 +51,6 @@ function unpackBits(str, len) {
 
 // Kekse-Bonus: alle Einnahmen (Produktion und Klicks) ×10^100
 export const MONEY_LOG = 100;
-// Preisanpassung (siehe priceLog): Exponent des Faktors (Gesamt-Kekse / 1 Mio)^PRICE_EXP; 0 = Preise unverändert
-export const PRICE_EXP = 0.25;
 export const OWN_CAP = 1e15; // maximale Anzahl je Gebäude (unter 2^53, damit jede Anzahl genau bleibt)
 export class Game {
   constructor() {
@@ -118,8 +116,8 @@ export class Game {
   }
   get seriesTotal() { let t = 0; for (const n of this.series) t += n; return t; }
   seriesVisible(i) { const s = SERIES[i]; return s.kind === 'bld' ? this.owned[s.b] >= s.need : this.totalReset.add(this.total).gte(s.baked); }
-  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n).mulLog(this.priceLog).compress(); }
-  seriesMax(i, budget = this.cookies) { return seriesMaxAffordable(SERIES[i], this.series[i], Big.from(budget).expand().mulLog(-this.priceLog)); }
+  seriesPrice(i, n = 1) { return seriesCost(SERIES[i], this.series[i], n).compress(); }
+  seriesMax(i, budget = this.cookies) { return seriesMaxAffordable(SERIES[i], this.series[i], Big.from(budget).expand()); }
   // n = Anzahl oder 'max'; gibt die gekauften Stufen zurück
   buySeries(i, n = 1) {
     const s = SERIES[i]; if (!s || !this.seriesVisible(i)) return 0;
@@ -206,13 +204,9 @@ export class Game {
   get clickValue() { return Big.fromLog(this.clickLog + (this.boost ? MONEY_LOG : 0)).compress().add(this.baseCps.mulN(this.clickPct)).mulN(this.buffMult('click')).clamp(); }
 
   // ---- Gebäude ----
-  // Preisanpassung: Je mehr Kekse du in DIESER Runde gebacken hast, desto teurer werden Gebäude und Mega-Stufen: Faktor = (Kekse dieser Runde / 1 Mio)^PRICE_EXP (ab 1 Mio, vorher 1).
-  // Es zählt die Gesamtzahl der Runde (steigt nie), nicht das Guthaben – Ausgeben macht also nichts billiger. Beim Aufstieg / „Alles löschen“ beginnt die Runde neu mit normalen Preisen
-  // (früher zählte alles seit Spielbeginn – nach einem Aufstieg waren die Preise dann unbezahlbar hoch und nichts ging mehr).
-  get priceLog() { const t = this.total; if (t.e < 6) return 0; const L = t.log10() - 6; return L > 0 ? L * PRICE_EXP : 0; }
-  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).mulLog(this.priceLog).compress(); }
+  buildingCost(i, amount = 1, owned = this.owned[i]) { return geoCost(BUILDINGS[i].base, GROWTH, owned, amount).compress(); }
   // Mehr als OWN_CAP je Gebäude gibt es nicht: darüber sind Anzahlen als Zahl nicht mehr genau (jeder weitere Kauf ginge verloren)
-  maxAffordable(i) { const room = OWN_CAP - this.owned[i]; return room > 0 ? geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand().mulLog(-this.priceLog), room) : 0; }
+  maxAffordable(i) { const room = OWN_CAP - this.owned[i]; return room > 0 ? geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], this.cookies.expand(), room) : 0; }
   buyBuilding(i, amount) {
     if (amount === 'max') amount = this.maxAffordable(i);
     amount = Math.min(amount, OWN_CAP - this.owned[i]);
@@ -271,7 +265,7 @@ export class Game {
     for (let round = 0; round < 3; round++) {
       const ok = []; for (let i = 0; i < this.owned.length; i++) if (this.owned[i] < OWN_CAP && this.buildingCost(i, 1).lte(this.cookies)) ok.push(i);
       if (!ok.length) break;
-      const share = this.cookies.divN(ok.length).expand().mulLog(-this.priceLog); let any = false;
+      const share = this.cookies.divN(ok.length).expand(); let any = false;
       for (const i of ok) { const k = Math.max(1, geoMax(BUILDINGS[i].base, GROWTH, this.owned[i], share, OWN_CAP - this.owned[i])); if (this.buyBuilding(i, k)) { n += k; any = true; } }
       if (!any) break;
     }
