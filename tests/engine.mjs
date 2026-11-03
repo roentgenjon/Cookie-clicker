@@ -289,3 +289,13 @@ console.log('Engine-Tests OK, Erfolge:', ACH.length, 'cps voll:', g3.cps.toStrin
   assert.ok(s.sing > sg0, 'Auto-Kauf kauft Singularität mit: ' + s.sing);
   console.log('Obergrenze-Test OK');
 }
+
+// ---- Preisanpassung zählt nur die aktuelle Runde (kein Festfahren nach dem Aufstieg) ----
+{
+  const { Big } = await import('../js/big.js');
+  const g = new Game(); g.totalReset = Big.fromLog(1e13); g.total = B(0); g.cookies = B(1e50);
+  assert.equal(g.priceLog, 0, 'frische Runde: normale Preise trotz riesiger früherer Runden');
+  assert.ok(g.buildingCost(0, 1).log10() < 2, 'erstes Gebäude kostet normal'); assert.ok(g.maxAffordable(0) > 100, 'Kaufen geht sofort wieder');
+  const h = new Game(); h.owned.fill(1e12); h.recalc(); h.cookies = Big.fromLog(1e13); h.total = h.cookies; h.ascend(); assert.equal(h.priceLog, 0, 'nach dem Aufstieg normale Preise');
+  console.log('Runden-Preis-Test OK');
+}

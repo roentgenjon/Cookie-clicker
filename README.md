@@ -16,7 +16,7 @@ Offline-Ertrag, Cloud-Speicherstand und Rangliste. Frontend auf **GitHub Pages**
 **Mega-Upgrades:** Zusätzlich gibt es 700 Reihen (90 Gebäude-Reihen in 6 Stufen, 5 Klick-, 5 Globalreihen, 600 Reihen – Bronze bis Kosmisch – für die 100 neuen Gebäude) mit je ~5·10^44 Stufen,
 die nacheinander gekauft werden. Zusammen mit den 400.000 oben ergibt das rund **3,5·10^47 Upgrades**.
 
-**Preise:** Gebäude und Mega-Stufen werden mit den insgesamt gebackenen Keksen teurer (Faktor (Gesamt / 1 Mio)^0,25, Konstante PRICE_EXP).
+**Preise:** Gebäude und Mega-Stufen werden mit den in dieser Runde gebackenen Keksen teurer (Faktor (Runde / 1 Mio)^0,25, Konstante PRICE_EXP); nach Aufstieg oder „Alles löschen“ gelten wieder normale Preise.
 
 **Kekse-Bonus:** für ältere Spielstände: alle Einnahmen (Produktion und Klicks) ×10^100. „Alles löschen“ und neue Spiele starten ohne ihn (echter Neustart, Klick = 1).
 
